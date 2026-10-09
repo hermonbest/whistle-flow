@@ -69,6 +69,22 @@ Replace hardcoded instances:
 - Change heading and paragraph colors to `var(--text-color)`.
 - Change font-family rules to `var(--font-family)`.
 
+#### Critical Specificity Rule (Utility Classes & Tailwind):
+If the site uses Tailwind CSS or utility classes (`.text-white`, `.text-zinc-100`, `.text-zinc-400`), direct classes on child elements will silently override `body { color: var(--text-color); }`. 
+Apply this global root-cause override to `<style>`:
+```css
+h1, h2, h3, h4, .text-white, .text-zinc-100, .text-zinc-200 {
+  color: var(--text-color) !important;
+}
+p, .text-zinc-300, .text-zinc-400, .text-zinc-500 {
+  color: var(--text-color) !important;
+  opacity: 0.82;
+}
+.text-cyan-400, .text-cyan-300 {
+  color: var(--primary-color) !important;
+}
+```
+
 ### Rule B: Enforce Flow-Based Auto-Stacking (The Anti-Overlap Engine)
 Check all top-level sections for overlap hazards:
 1. **Remove hardcoded heights:** Replace `height: 800px` or `height: 100vh` with `min-height: ...; height: auto;`.
