@@ -1,8 +1,12 @@
+# For local testing without OAuth/Git credentials, use test-repo.
+# In production on Netlify or GitHub, change to:
+# backend:
+#   name: git-gateway
+#   branch: master
 backend:
-  name: git-gateway
+  name: test-repo
   branch: master
 
-local_backend: true
 
 media_folder: "assets/uploads"
 public_folder: "/assets/uploads"
