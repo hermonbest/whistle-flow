@@ -1,0 +1,43 @@
+{
+  "title": "Nova Labs — Future-Ready Digital Products",
+  "theme": {
+    "primaryColor": "#6366f1",
+    "backgroundColor": "#0b0f19",
+    "textColor": "#f3f4f6",
+    "fontFamily": "Plus Jakarta Sans"
+  },
+  "sections": [
+    {
+      "type": "hero",
+      "headline": "Build faster. Customize effortlessly.",
+      "subheadline": "A modular architecture giving clients full design freedom without breaking responsiveness or layout flow.",
+      "buttonText": "Explore Capabilities",
+      "buttonLink": "#features"
+    },
+    {
+      "type": "features",
+      "title": "Engineered for Flexibility & Scale",
+      "items": [
+        {
+          "title": "Flow-Based Auto Stacking",
+          "description": "Sections automatically adapt and stack. No overlapping elements or broken mobile layouts."
+        },
+        {
+          "title": "Live Design Tokens",
+          "description": "Colors and typography switch on the fly via CSS variables with curated guardrails."
+        },
+        {
+          "title": "100% Free & Open Source",
+          "description": "Zero monthly SaaS subscription fees. Decap CMS lives directly in your project repository."
+        }
+      ]
+    },
+    {
+      "type": "cta",
+      "title": "Empower your clients without losing control",
+      "description": "Give your clients their own customizer link while you keep your code clean and rock-solid.",
+      "buttonText": "Open Admin Dashboard",
+      "buttonLink": "admin/index.html"
+    }
+  ]
+}

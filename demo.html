@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Customizable Client Landing Page</title>
+
+  <!-- Preconnect and Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Playfair+Display:ital,wght@0,600;0,700;1,400&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <style>
+    /* -------------------------------------------------------------
+       1. DYNAMIC CSS DESIGN TOKENS
+       These variables are controlled by the client in Decap CMS.
+       When values update, the entire site restyles harmoniously.
+       ------------------------------------------------------------- */
+    :root {
+      --primary-color: #6366f1;
+      --bg-color: #0b0f19;
+      --text-color: #f3f4f6;
+      --font-family: 'Plus Jakarta Sans', sans-serif;
+      --card-bg: rgba(255, 255, 255, 0.04);
+      --card-border: rgba(255, 255, 255, 0.08);
+      --card-hover-border: rgba(255, 255, 255, 0.2);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--bg-color);
+      color: var(--text-color);
+      font-family: var(--font-family);
+      line-height: 1.6;
+      min-height: 100vh;
+      transition: background-color 0.3s ease, color 0.3s ease;
+      overflow-x: hidden;
+    }
+
+    /* -------------------------------------------------------------
+       2. FLOW-BASED MAIN CONTAINER
+       By using standard Flex Column flow, overlapping is impossible.
+       No matter the order or height of blocks, the layout responds.
+       ------------------------------------------------------------- */
+    #site-canvas {
+      display: flex;
+      flex-direction: column;
+      width: 100%;
+      min-height: 100vh;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 1140px;
+      margin: 0 auto;
+      padding: 0 1.5rem;
+    }
+
+    /* Navigation Bar */
+    header {
+      padding: 1.25rem 0;
+      border-bottom: 1px solid var(--card-border);
+      backdrop-filter: blur(12px);
+      position: sticky;
+      top: 0;
+      z-index: 40;
+      background: rgba(11, 15, 25, 0.85);
+    }
+
+    .nav-inner {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .brand-logo {
+      font-weight: 800;
+      font-size: 1.25rem;
+      letter-spacing: -0.02em;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .brand-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--primary-color);
+      box-shadow: 0 0 12px var(--primary-color);
+    }
+
+    /* Floating Admin Link for the client */
+    .admin-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      background: var(--primary-color);
+      color: #ffffff;
+      padding: 0.5rem 1rem;
+      border-radius: 9999px;
+      font-size: 0.875rem;
+      font-weight: 600;
+      text-decoration: none;
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+      box-shadow: 0 4px 14px rgba(99, 102, 241, 0.35);
+    }
+
+    .admin-pill:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(99, 102, 241, 0.5);
+    }
+
+    /* SECTION 1: HERO */
+    .section-hero {
+      padding: 6rem 0 5rem;
+      text-align: center;
+      position: relative;
+    }
+
+    .section-hero h1 {
+      font-size: clamp(2.5rem, 5vw, 4.25rem);
+      font-weight: 800;
+      line-height: 1.12;
+      letter-spacing: -0.03em;
+      max-width: 860px;
+      margin: 0 auto 1.5rem;
+      background: linear-gradient(180deg, #ffffff 40%, rgba(255, 255, 255, 0.7) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .section-hero p {
+      font-size: 1.2rem;
+      color: rgba(243, 244, 246, 0.75);
+      max-width: 640px;
+      margin: 0 auto 2.5rem;
+    }
+
+    .btn-primary {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      background: var(--primary-color);
+      color: #ffffff;
+      padding: 0.875rem 2rem;
+      border-radius: 12px;
+      font-weight: 600;
+      font-size: 1rem;
+      text-decoration: none;
+      transition: all 0.25s ease;
+      box-shadow: 0 8px 24px rgba(99, 102, 241, 0.35);
+    }
+
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      filter: brightness(1.1);
+    }
+
+    /* SECTION 2: FEATURES GRID */
+    .section-features {
+      padding: 5rem 0;
+    }
+
+    .section-heading {
+      text-align: center;
+      margin-bottom: 3.5rem;
+    }
+
+    .section-heading h2 {
+      font-size: 2.25rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+
+    .grid-3 {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 1.75rem;
+    }
+
+    .feature-card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 16px;
+      padding: 2rem;
+      transition: border-color 0.25s ease, transform 0.25s ease;
+    }
+
+    .feature-card:hover {
+      border-color: var(--card-hover-border);
+      transform: translateY(-4px);
+    }
+
+    .feature-icon-box {
+      width: 44px;
+      height: 44px;
+      border-radius: 10px;
+      background: rgba(99, 102, 241, 0.15);
+      color: var(--primary-color);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 1.25rem;
+      margin-bottom: 1.25rem;
+    }
+
+    .feature-card h3 {
+      font-size: 1.25rem;
+      font-weight: 700;
+      margin-bottom: 0.75rem;
+    }
+
+    .feature-card p {
+      color: rgba(243, 244, 246, 0.7);
+      font-size: 0.975rem;
+    }
+
+    /* SECTION 3: CTA BANNER */
+    .section-cta {
+      padding: 4rem 0 6rem;
+    }
+
+    .cta-box {
+      background: linear-gradient(135deg, rgba(99, 102, 241, 0.12), rgba(255, 255, 255, 0.03));
+      border: 1px solid rgba(99, 102, 241, 0.3);
+      border-radius: 24px;
+      padding: 3.5rem 2rem;
+      text-align: center;
+      max-width: 900px;
+      margin: 0 auto;
+    }
+
+    .cta-box h2 {
+      font-size: 2.25rem;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      margin-bottom: 1rem;
+    }
+
+    .cta-box p {
+      color: rgba(243, 244, 246, 0.75);
+      max-width: 580px;
+      margin: 0 auto 2rem;
+      font-size: 1.1rem;
+    }
+
+    /* Footer */
+    footer {
+      border-top: 1px solid var(--card-border);
+      padding: 2.5rem 0;
+      text-align: center;
+      font-size: 0.875rem;
+      color: rgba(243, 244, 246, 0.5);
+    }
+
+    /* Notice banner for Pair Programming / Demo walkthrough */
+    .demo-indicator {
+      background: rgba(99, 102, 241, 0.12);
+      border-bottom: 1px solid rgba(99, 102, 241, 0.25);
+      padding: 0.6rem 1rem;
+      font-size: 0.825rem;
+      text-align: center;
+      color: #e0e7ff;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .demo-indicator code {
+      background: rgba(0, 0, 0, 0.4);
+      padding: 0.15rem 0.45rem;
+      border-radius: 4px;
+      font-family: monospace;
+      color: #93c5fd;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Demo Notice Banner -->
+  <div class="demo-indicator">
+    <span>💡 <strong>Decap CMS Demo:</strong> All colors, typography, and section orders are read from <code>content/site.json</code>.</span>
+    <a href="admin/index.html" class="admin-pill" style="padding: 0.25rem 0.75rem; font-size: 0.75rem;">Open Admin (/admin)</a>
+  </div>
+
+  <header>
+    <div class="container nav-inner">
+      <div class="brand-logo" id="site-logo">
+        <span class="brand-dot"></span>
+        <span id="site-title-text">Nova Labs</span>
+      </div>
+      <a href="admin/index.html" class="admin-pill">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 20h9"></path>
+          <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
+        </svg>
+        Customize Site
+      </a>
+    </div>
+  </header>
+
+  <!-- Flow Container: Render target for dynamic, non-overlapping blocks -->
+  <main id="site-canvas">
+    <div style="text-align: center; padding: 4rem;">Loading customized sections...</div>
+  </main>
+
+  <footer>
+    <div class="container">
+      <p id="footer-text">Built with modular flow-based architecture & Decap CMS. No subscription fees.</p>
+    </div>
+  </footer>
+
+  <script>
+    /* -------------------------------------------------------------
+       3. DYNAMIC RENDERING SCRIPT
+       Loads content/site.json, updates CSS variables, and renders
+       sections in the exact array sequence set by the client.
+       ------------------------------------------------------------- */
+    async function loadSiteData() {
+      try {
+        const response = await fetch('./content/site.json', { cache: 'no-store' });
+        if (!response.ok) throw new Error('Could not load site.json');
+        const data = await response.json();
+        applyCustomization(data);
+      } catch (err) {
+        console.warn('Fallback: loading embedded default state', err);
+        // Fallback default state in case local file:// access blocks fetch
+        applyCustomization({
+          title: "Nova Labs — Future-Ready Digital Products",
+          theme: {
+            primaryColor: "#6366f1",
+            backgroundColor: "#0b0f19",
+            textColor: "#f3f4f6",
+            fontFamily: "Plus Jakarta Sans"
+          },
+          sections: [
+            {
+              type: "hero",
+              headline: "Build faster. Customize effortlessly.",
+              subheadline: "A modular architecture giving clients full design freedom without breaking responsiveness or layout flow.",
+              buttonText: "Explore Capabilities",
+              buttonLink: "#features"
+            },
+            {
+              type: "features",
+              title: "Engineered for Flexibility & Scale",
+              items: [
+                {
+                  title: "Flow-Based Auto Stacking",
+                  description: "Sections automatically adapt and stack. No overlapping elements or broken mobile layouts."
+                },
+                {
+                  title: "Live Design Tokens",
+                  description: "Colors and typography switch on the fly via CSS variables with curated guardrails."
+                },
+                {
+                  title: "100% Free & Open Source",
+                  description: "Zero monthly SaaS subscription fees. Decap CMS lives directly in your project repository."
+                }
+              ]
+            },
+            {
+              type: "cta",
+              title: "Empower your clients without losing control",
+              description: "Give your clients their own customizer link while you keep your code clean and rock-solid.",
+              buttonText: "Open Admin Dashboard",
+              buttonLink: "admin/index.html"
+            }
+          ]
+        });
+      }
+    }
+
+    function applyCustomization(data) {
+      // 1. Update Title
+      if (data.title) {
+        document.title = data.title;
+        const logoText = document.getElementById('site-title-text');
+        if (logoText) logoText.innerText = data.title.split('—')[0].trim();
+      }
+
+      // 2. Apply Design Tokens (CSS Variables)
+      if (data.theme) {
+        const root = document.documentElement;
+        if (data.theme.primaryColor) root.style.setProperty('--primary-color', data.theme.primaryColor);
+        if (data.theme.backgroundColor) root.style.setProperty('--bg-color', data.theme.backgroundColor);
+        if (data.theme.textColor) root.style.setProperty('--text-color', data.theme.textColor);
+        if (data.theme.fontFamily) {
+          root.style.setProperty('--font-family', `'${data.theme.fontFamily}', sans-serif`);
+        }
+      }
+
+      // 3. Render Sections sequentially (guarantees NO OVERLAP)
+      const canvas = document.getElementById('site-canvas');
+      canvas.innerHTML = ''; // Clear loading placeholder
+
+      if (Array.isArray(data.sections)) {
+        data.sections.forEach((section, index) => {
+          const sectionEl = document.createElement('section');
+          sectionEl.setAttribute('data-section-index', index);
+          sectionEl.setAttribute('data-section-type', section.type);
+
+          if (section.type === 'hero') {
+            sectionEl.className = 'section-hero';
+            sectionEl.innerHTML = `
+              <div class="container">
+                <h1>${escapeHtml(section.headline || '')}</h1>
+                <p>${escapeHtml(section.subheadline || '')}</p>
+                ${section.buttonText ? `<a href="${section.buttonLink || '#'}" class="btn-primary">${escapeHtml(section.buttonText)}</a>` : ''}
+              </div>
+            `;
+          } else if (section.type === 'features') {
+            sectionEl.className = 'section-features';
+            sectionEl.id = 'features';
+            const itemsHtml = (section.items || []).map((item, i) => `
+              <div class="feature-card">
+                <div class="feature-icon-box">0${i + 1}</div>
+                <h3>${escapeHtml(item.title || '')}</h3>
+                <p>${escapeHtml(item.description || '')}</p>
+              </div>
+            `).join('');
+
+            sectionEl.innerHTML = `
+              <div class="container">
+                <div class="section-heading">
+                  <h2>${escapeHtml(section.title || 'Features')}</h2>
+                </div>
+                <div class="grid-3">${itemsHtml}</div>
+              </div>
+            `;
+          } else if (section.type === 'cta') {
+            sectionEl.className = 'section-cta';
+            sectionEl.innerHTML = `
+              <div class="container">
+                <div class="cta-box">
+                  <h2>${escapeHtml(section.title || '')}</h2>
+                  <p>${escapeHtml(section.description || '')}</p>
+                  ${section.buttonText ? `<a href="${section.buttonLink || '#'}" class="btn-primary">${escapeHtml(section.buttonText)}</a>` : ''}
+                </div>
+              </div>
+            `;
+          }
+
+          canvas.appendChild(sectionEl);
+        });
+      }
+    }
+
+    function escapeHtml(str) {
+      return str
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+    }
+
+    // Execute immediately on DOM ready
+    window.addEventListener('DOMContentLoaded', loadSiteData);
+  </script>
+</body>
+</html>
