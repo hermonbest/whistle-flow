@@ -2050,43 +2050,60 @@ supabase.channel(<span class="text-emerald-400">'kitchen_dispatch'</span>)
         <div><label style="font-size:10px;opacity:.7">Background</label><input type="color" id="cr-b" value="${s.b||'#050508'}" style="width:100%;height:26px;border:0;background:none;cursor:pointer"></div>
       </div>
       <div style="margin-bottom:10px">
-        <label style="font-size:10px;opacity:.7">Font (Pick or type ANY Google font)</label>
-        <input list="cr-fonts" id="cr-f" value="${s.f||'Geist'}" placeholder="Type any Google Font..." style="width:100%;box-sizing:border-box;padding:5px 8px;background:#1a1a24;color:#fff;border:1px solid rgba(255,255,255,.15);border-radius:6px;font-size:11px">
-        <datalist id="cr-fonts">
-          <option value="Geist">
-          <option value="Inter">
-          <option value="Plus Jakarta Sans">
-          <option value="Outfit">
-          <option value="DM Sans">
-          <option value="Manrope">
-          <option value="Poppins">
-          <option value="Montserrat">
-          <option value="Roboto">
-          <option value="Open Sans">
-          <option value="Space Grotesk">
-          <option value="Syne">
-          <option value="Bricolage Grotesque">
-          <option value="Oswald">
-          <option value="Bebas Neue">
-          <option value="Playfair Display">
-          <option value="Lora">
-          <option value="Cinzel">
-          <option value="Cormorant Garamond">
-          <option value="Merriweather">
-          <option value="Bodoni Moda">
-          <option value="JetBrains Mono">
-          <option value="Fira Code">
-        </datalist>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+          <label style="font-size:10px;opacity:.7">Font Family</label>
+          <button id="cr-f-toggle" type="button" style="background:none;border:none;color:#22d3ee;cursor:pointer;font-size:10px;padding:0;text-decoration:underline">+ Type Custom</button>
+        </div>
+        <select id="cr-f-select" style="width:100%;box-sizing:border-box;padding:5px 6px;background:#1a1a24;color:#fff;border:1px solid rgba(255,255,255,.15);border-radius:6px;font-size:11px">
+          <option value="Geist">Geist (Modern Tech)</option>
+          <option value="Inter">Inter (Standard SaaS)</option>
+          <option value="Plus Jakarta Sans">Plus Jakarta Sans (Clean)</option>
+          <option value="Outfit">Outfit (Geometric)</option>
+          <option value="DM Sans">DM Sans (Minimal)</option>
+          <option value="Manrope">Manrope (Grotesque)</option>
+          <option value="Poppins">Poppins (Geometric Soft)</option>
+          <option value="Montserrat">Montserrat (Classic Bold)</option>
+          <option value="Space Grotesk">Space Grotesk (Neo-Brutal)</option>
+          <option value="Syne">Syne (Artistic Display)</option>
+          <option value="Playfair Display">Playfair Display (Editorial)</option>
+          <option value="Lora">Lora (Modern Serif)</option>
+          <option value="Cinzel">Cinzel (Roman Luxury)</option>
+          <option value="Cormorant Garamond">Cormorant Garamond (Elegance)</option>
+          <option value="JetBrains Mono">JetBrains Mono (Monospace)</option>
+        </select>
+        <input type="text" id="cr-f-input" placeholder="Type any Google font name..." style="display:none;width:100%;box-sizing:border-box;padding:5px 8px;background:#1a1a24;color:#fff;border:1px solid rgba(255,255,255,.15);border-radius:6px;font-size:11px">
       </div>
       <button id="cr-copy" style="width:100%;background:#22d3ee;color:#000;font-weight:700;border:0;border-radius:6px;padding:7px;cursor:pointer;font-size:11px">Copy Approved CSS</button>
     `;
     document.body.appendChild(d);
 
-    const ch = d.querySelector('#cr-h'), ct = d.querySelector('#cr-t'), cp = d.querySelector('#cr-p'), cb = d.querySelector('#cr-b'), cf = d.querySelector('#cr-f');
-    if (s.f) cf.value = s.f;
+    const ch = d.querySelector('#cr-h'), ct = d.querySelector('#cr-t'), cp = d.querySelector('#cr-p'), cb = d.querySelector('#cr-b');
+    const fSel = d.querySelector('#cr-f-select'), fInp = d.querySelector('#cr-f-input'), fTog = d.querySelector('#cr-f-toggle');
+    let isCustomFont = false;
+
+    if (s.f) {
+      if ([...fSel.options].some(o => o.value === s.f)) {
+        fSel.value = s.f;
+      } else {
+        isCustomFont = true;
+        fSel.style.display = 'none';
+        fInp.style.display = 'block';
+        fInp.value = s.f;
+        fTog.innerText = '← Pick list';
+      }
+    }
+
+    fTog.onclick = function() {
+      isCustomFont = !isCustomFont;
+      fSel.style.display = isCustomFont ? 'none' : 'block';
+      fInp.style.display = isCustomFont ? 'block' : 'none';
+      fTog.innerText = isCustomFont ? '← Pick list' : '+ Type Custom';
+      if (isCustomFont) fInp.focus();
+      apply();
+    };
 
     function apply() {
-      const font = cf.value.trim();
+      const font = (isCustomFont ? fInp.value : fSel.value).trim();
       if (!font) return;
       loadGoogleFont(font);
       r.setProperty('--heading-color', ch.value);
@@ -2098,11 +2115,12 @@ supabase.channel(<span class="text-emerald-400">'kitchen_dispatch'</span>)
     }
 
     [ch, ct, cp, cb].forEach(el => el.addEventListener('input', apply));
-    cf.addEventListener('input', apply);
-    cf.addEventListener('change', apply);
+    fSel.addEventListener('change', apply);
+    fInp.addEventListener('input', apply);
 
     d.querySelector('#cr-copy').onclick = function() {
-      const css = `:root {\\n  --heading-color: ${ch.value};\\n  --body-color: ${ct.value};\\n  --primary-color: ${cp.value};\\n  --bg-color: ${cb.value};\\n  --font-family: '${cf.value}', sans-serif;\\n}`;
+      const font = (isCustomFont ? fInp.value : fSel.value).trim();
+      const css = `:root {\\n  --heading-color: ${ch.value};\\n  --body-color: ${ct.value};\\n  --primary-color: ${cp.value};\\n  --bg-color: ${cb.value};\\n  --font-family: '${font}', sans-serif;\\n}`;
       navigator.clipboard.writeText(css).then(() => alert('Copied CSS to clipboard! Send this to the developer.'));
     };
   })();
