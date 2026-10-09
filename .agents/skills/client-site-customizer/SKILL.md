@@ -128,17 +128,18 @@ Inject the client review script right before `</body>`.
   const savedConfig = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
   const root = document.documentElement;
 
-  // Dynamic Google Font Loader (Loads only chosen font on-demand)
-  function loadGoogleFont(font) {
+  // Dynamic Google Font Loader (Loads chosen fonts into dedicated slot links)
+  function loadGoogleFont(font, slot) {
     if (!font || font.includes('system-ui')) return;
-    let link = document.getElementById('cr-dyn-font');
+    const linkId = 'cr-dyn-font-' + (slot || 'default');
+    let link = document.getElementById(linkId);
     if (!link) {
       link = document.createElement('link');
-      link.id = 'cr-dyn-font';
+      link.id = linkId;
       link.rel = 'stylesheet';
       document.head.appendChild(link);
     }
-    link.href = 'https://fonts.googleapis.com/css2?family=' + encodeURIComponent(font) + ':wght@400;600;700;800&display=swap';
+    link.href = 'https://fonts.googleapis.com/css2?family=' + encodeURIComponent(font).replace(/%20/g, '+') + ':wght@400;600;700;800&display=swap';
   }
 
   // Apply saved values immediately on load
@@ -147,11 +148,11 @@ Inject the client review script right before `</body>`.
   if (savedConfig.heading) root.style.setProperty('--heading-color', savedConfig.heading);
   if (savedConfig.body) root.style.setProperty('--body-color', savedConfig.body);
   if (savedConfig.hf) {
-    loadGoogleFont(savedConfig.hf);
+    loadGoogleFont(savedConfig.hf, 'hf');
     root.style.setProperty('--heading-font', `'${savedConfig.hf}', sans-serif`);
   }
   if (savedConfig.bf) {
-    loadGoogleFont(savedConfig.bf);
+    loadGoogleFont(savedConfig.bf, 'bf');
     root.style.setProperty('--body-font', `'${savedConfig.bf}', sans-serif`);
   }
 
@@ -264,8 +265,8 @@ Inject the client review script right before `</body>`.
 
   function updateTokens() {
     const hf = getHf(), bf = getBf();
-    if (hf) loadGoogleFont(hf);
-    if (bf) loadGoogleFont(bf);
+    if (hf) loadGoogleFont(hf, 'hf');
+    if (bf) loadGoogleFont(bf, 'bf');
     const config = {
       heading: hInput.value,
       body: bInput.value,
@@ -307,7 +308,7 @@ Inject the client review script right before `</body>`.
 When the client is satisfied with their adjustments:
 
 1. **Client Action:**  
-   The client clicks **"📋 Copy Final Approved Style"** and sends the 5-line CSS block to the developer.
+   The client clicks **"📋 Copy Final Approved Style"** and sends the 6-line CSS block to the developer.
 2. **Developer Lock-In:**  
    - Open the project’s CSS file.
    - Paste the values into `:root`.
@@ -318,3 +319,25 @@ When the client is satisfied with their adjustments:
 4. **Verification:**  
    - Visit `site.vercel.app?edit=true`.
    - Verify that the customizer dock is completely gone and the approved style is permanently live.
+
+---
+
+## Phase 5: Verification & End-to-End Testing Protocol
+
+Whenever injecting or updating the customizer, the agent must verify all 5 acceptance gates:
+
+1. **Dual Font Slot Independence:**
+   - Verify that `<link id="cr-dyn-font-hf">` and `<link id="cr-dyn-font-bf">` exist independently in `<head>`.
+   - Changing the heading font must NOT cancel or overwrite the body font stylesheet.
+   - Inspect computed styles on `h1..h3` to confirm `font-family` matches `--heading-font`, and `p`/`body` matches `--body-font`.
+2. **Color Specificity Check:**
+   - Confirm heading text (`h1`, `h2`, `h3`, `.text-white`) displays `var(--heading-color)`.
+   - Confirm body paragraphs (`p`, `.text-zinc-400`) display `var(--body-color)`.
+   - Confirm accent buttons/badges display `var(--primary-color)`.
+3. **Responsive Non-Overlap Flow:**
+   - Confirm `#page-container` or `main` has flex column flow (`display: flex; flex-direction: column`).
+   - Confirm no section has a hardcoded fixed height or absolute positioning that causes overlap when fonts resize.
+4. **LocalStorage Persistence:**
+   - Modify colors and fonts, reload the page with `?edit=1` or `?edit=true`, and verify all customized styles persist immediately on load.
+5. **Gating & Clean Production State:**
+   - Without `?edit=1`/`?edit=true`, the dock element must never exist in the DOM for regular visitors.
