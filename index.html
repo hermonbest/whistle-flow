@@ -76,7 +76,8 @@
       --heading-color: #f4f4f5;
       --body-color: #a1a1aa;
       --primary-color: #22d3ee;
-      --font-family: 'Geist', -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+      --heading-font: 'Geist', -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+      --body-font: 'Geist', -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
       color-scheme: dark;
       --font-display-tracking: -0.035em;
       --font-body-tracking: -0.012em;
@@ -91,7 +92,7 @@
     body {
       background-color: var(--bg-color);
       color: var(--body-color);
-      font-family: var(--font-family);
+      font-family: var(--body-font);
       overflow-x: hidden;
       letter-spacing: var(--font-body-tracking);
     }
@@ -99,9 +100,11 @@
     /* Dynamic Theme Overrides for Client Customizer */
     h1, h2, h3, h4, .text-white, .text-zinc-100, .text-zinc-200 {
       color: var(--heading-color) !important;
+      font-family: var(--heading-font) !important;
     }
     p, .text-zinc-300, .text-zinc-400, .text-zinc-500 {
       color: var(--body-color) !important;
+      font-family: var(--body-font);
     }
     .text-cyan-400, .text-cyan-300 {
       color: var(--primary-color) !important;
@@ -2029,12 +2032,40 @@ supabase.channel(<span class="text-emerald-400">'kitchen_dispatch'</span>)
     if (s.b) r.setProperty('--bg-color', s.b);
     if (s.h) r.setProperty('--heading-color', s.h);
     if (s.t) r.setProperty('--body-color', s.t);
-    if (s.f) {
-      loadGoogleFont(s.f);
-      r.setProperty('--font-family', "'" + s.f + "', sans-serif");
+    if (s.hf) {
+      loadGoogleFont(s.hf);
+      r.setProperty('--heading-font', "'" + s.hf + "', sans-serif");
+    }
+    if (s.bf) {
+      loadGoogleFont(s.bf);
+      r.setProperty('--body-font', "'" + s.bf + "', sans-serif");
     }
 
     if (p.get('edit') !== '1' && p.get('edit') !== 'true') return;
+
+    function fontHtml(label, id) {
+      return `
+        <div style="margin-bottom:8px">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px">
+            <label style="font-size:10px;opacity:.7">${label}</label>
+            <button id="${id}-tog" type="button" style="background:none;border:none;color:#22d3ee;cursor:pointer;font-size:10px;padding:0;text-decoration:underline">+ Custom</button>
+          </div>
+          <select id="${id}-sel" style="width:100%;box-sizing:border-box;padding:4px 6px;background:#1a1a24;color:#fff;border:1px solid rgba(255,255,255,.15);border-radius:6px;font-size:11px">
+            <option value="Geist">Geist (Modern Tech)</option>
+            <option value="Inter">Inter (Standard SaaS)</option>
+            <option value="Plus Jakarta Sans">Plus Jakarta Sans (Clean)</option>
+            <option value="Outfit">Outfit (Geometric)</option>
+            <option value="Space Grotesk">Space Grotesk (Neo-Brutal)</option>
+            <option value="Syne">Syne (Artistic Display)</option>
+            <option value="Playfair Display">Playfair Display (Editorial)</option>
+            <option value="Cinzel">Cinzel (Roman Luxury)</option>
+            <option value="Lora">Lora (Modern Serif)</option>
+            <option value="JetBrains Mono">JetBrains Mono (Code)</option>
+          </select>
+          <input type="text" id="${id}-inp" placeholder="Type Google font name..." style="display:none;width:100%;box-sizing:border-box;padding:4px 6px;background:#1a1a24;color:#fff;border:1px solid rgba(255,255,255,.15);border-radius:6px;font-size:11px">
+        </div>
+      `;
+    }
 
     const d = document.createElement('div');
     d.style = "position:fixed;bottom:16px;right:16px;background:#0d0d12;color:#f4f4f5;padding:14px;border:1px solid rgba(255,255,255,0.18);border-radius:12px;z-index:999999;font:12px/1.4 system-ui,sans-serif;box-shadow:0 12px 32px rgba(0,0,0,0.7);width:260px";
@@ -2044,83 +2075,65 @@ supabase.channel(<span class="text-emerald-400">'kitchen_dispatch'</span>)
         <span style="color:#22d3ee;font-size:10px">?edit=1</span>
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:8px">
-        <div><label style="font-size:10px;opacity:.7">Headings</label><input type="color" id="cr-h" value="${s.h||'#f4f4f5'}" style="width:100%;height:26px;border:0;background:none;cursor:pointer"></div>
-        <div><label style="font-size:10px;opacity:.7">Body Text</label><input type="color" id="cr-t" value="${s.t||'#a1a1aa'}" style="width:100%;height:26px;border:0;background:none;cursor:pointer"></div>
-        <div><label style="font-size:10px;opacity:.7">Primary Accent</label><input type="color" id="cr-p" value="${s.p||'#22d3ee'}" style="width:100%;height:26px;border:0;background:none;cursor:pointer"></div>
+        <div><label style="font-size:10px;opacity:.7">Headings Color</label><input type="color" id="cr-h" value="${s.h||'#f4f4f5'}" style="width:100%;height:26px;border:0;background:none;cursor:pointer"></div>
+        <div><label style="font-size:10px;opacity:.7">Body Color</label><input type="color" id="cr-t" value="${s.t||'#a1a1aa'}" style="width:100%;height:26px;border:0;background:none;cursor:pointer"></div>
+        <div><label style="font-size:10px;opacity:.7">Accent</label><input type="color" id="cr-p" value="${s.p||'#22d3ee'}" style="width:100%;height:26px;border:0;background:none;cursor:pointer"></div>
         <div><label style="font-size:10px;opacity:.7">Background</label><input type="color" id="cr-b" value="${s.b||'#050508'}" style="width:100%;height:26px;border:0;background:none;cursor:pointer"></div>
       </div>
-      <div style="margin-bottom:10px">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
-          <label style="font-size:10px;opacity:.7">Font Family</label>
-          <button id="cr-f-toggle" type="button" style="background:none;border:none;color:#22d3ee;cursor:pointer;font-size:10px;padding:0;text-decoration:underline">+ Type Custom</button>
-        </div>
-        <select id="cr-f-select" style="width:100%;box-sizing:border-box;padding:5px 6px;background:#1a1a24;color:#fff;border:1px solid rgba(255,255,255,.15);border-radius:6px;font-size:11px">
-          <option value="Geist">Geist (Modern Tech)</option>
-          <option value="Inter">Inter (Standard SaaS)</option>
-          <option value="Plus Jakarta Sans">Plus Jakarta Sans (Clean)</option>
-          <option value="Outfit">Outfit (Geometric)</option>
-          <option value="DM Sans">DM Sans (Minimal)</option>
-          <option value="Manrope">Manrope (Grotesque)</option>
-          <option value="Poppins">Poppins (Geometric Soft)</option>
-          <option value="Montserrat">Montserrat (Classic Bold)</option>
-          <option value="Space Grotesk">Space Grotesk (Neo-Brutal)</option>
-          <option value="Syne">Syne (Artistic Display)</option>
-          <option value="Playfair Display">Playfair Display (Editorial)</option>
-          <option value="Lora">Lora (Modern Serif)</option>
-          <option value="Cinzel">Cinzel (Roman Luxury)</option>
-          <option value="Cormorant Garamond">Cormorant Garamond (Elegance)</option>
-          <option value="JetBrains Mono">JetBrains Mono (Monospace)</option>
-        </select>
-        <input type="text" id="cr-f-input" placeholder="Type any Google font name..." style="display:none;width:100%;box-sizing:border-box;padding:5px 8px;background:#1a1a24;color:#fff;border:1px solid rgba(255,255,255,.15);border-radius:6px;font-size:11px">
-      </div>
+      ${fontHtml('Headings Font', 'cr-hf')}
+      ${fontHtml('Body Text Font', 'cr-bf')}
       <button id="cr-copy" style="width:100%;background:#22d3ee;color:#000;font-weight:700;border:0;border-radius:6px;padding:7px;cursor:pointer;font-size:11px">Copy Approved CSS</button>
     `;
     document.body.appendChild(d);
 
     const ch = d.querySelector('#cr-h'), ct = d.querySelector('#cr-t'), cp = d.querySelector('#cr-p'), cb = d.querySelector('#cr-b');
-    const fSel = d.querySelector('#cr-f-select'), fInp = d.querySelector('#cr-f-input'), fTog = d.querySelector('#cr-f-toggle');
-    let isCustomFont = false;
 
-    if (s.f) {
-      if ([...fSel.options].some(o => o.value === s.f)) {
-        fSel.value = s.f;
-      } else {
-        isCustomFont = true;
-        fSel.style.display = 'none';
-        fInp.style.display = 'block';
-        fInp.value = s.f;
-        fTog.innerText = '← Pick list';
+    function wireFont(id, savedVal) {
+      const sel = d.querySelector(`#${id}-sel`), inp = d.querySelector(`#${id}-inp`), tog = d.querySelector(`#${id}-tog`);
+      let custom = false;
+      if (savedVal) {
+        if ([...sel.options].some(o => o.value === savedVal)) {
+          sel.value = savedVal;
+        } else {
+          custom = true;
+          sel.style.display = 'none';
+          inp.style.display = 'block';
+          inp.value = savedVal;
+          tog.innerText = '← List';
+        }
       }
+      tog.onclick = function() {
+        custom = !custom;
+        sel.style.display = custom ? 'none' : 'block';
+        inp.style.display = custom ? 'block' : 'none';
+        tog.innerText = custom ? '← List' : '+ Custom';
+        if (custom) inp.focus();
+        apply();
+      };
+      sel.addEventListener('change', apply);
+      inp.addEventListener('input', apply);
+      return () => (custom ? inp.value : sel.value).trim();
     }
 
-    fTog.onclick = function() {
-      isCustomFont = !isCustomFont;
-      fSel.style.display = isCustomFont ? 'none' : 'block';
-      fInp.style.display = isCustomFont ? 'block' : 'none';
-      fTog.innerText = isCustomFont ? '← Pick list' : '+ Type Custom';
-      if (isCustomFont) fInp.focus();
-      apply();
-    };
+    const getHf = wireFont('cr-hf', s.hf || 'Geist');
+    const getBf = wireFont('cr-bf', s.bf || 'Geist');
 
     function apply() {
-      const font = (isCustomFont ? fInp.value : fSel.value).trim();
-      if (!font) return;
-      loadGoogleFont(font);
+      const hf = getHf(), bf = getBf();
+      if (hf) { loadGoogleFont(hf); r.setProperty('--heading-font', "'" + hf + "', sans-serif"); }
+      if (bf) { loadGoogleFont(bf); r.setProperty('--body-font', "'" + bf + "', sans-serif"); }
       r.setProperty('--heading-color', ch.value);
       r.setProperty('--body-color', ct.value);
       r.setProperty('--primary-color', cp.value);
       r.setProperty('--bg-color', cb.value);
-      r.setProperty('--font-family', "'" + font + "', sans-serif");
-      localStorage.setItem(k, JSON.stringify({ h: ch.value, t: ct.value, p: cp.value, b: cb.value, f: font }));
+      localStorage.setItem(k, JSON.stringify({ h: ch.value, t: ct.value, p: cp.value, b: cb.value, hf, bf }));
     }
 
     [ch, ct, cp, cb].forEach(el => el.addEventListener('input', apply));
-    fSel.addEventListener('change', apply);
-    fInp.addEventListener('input', apply);
 
     d.querySelector('#cr-copy').onclick = function() {
-      const font = (isCustomFont ? fInp.value : fSel.value).trim();
-      const css = `:root {\\n  --heading-color: ${ch.value};\\n  --body-color: ${ct.value};\\n  --primary-color: ${cp.value};\\n  --bg-color: ${cb.value};\\n  --font-family: '${font}', sans-serif;\\n}`;
+      const hf = getHf(), bf = getBf();
+      const css = `:root {\\n  --heading-color: ${ch.value};\\n  --body-color: ${ct.value};\\n  --primary-color: ${cp.value};\\n  --bg-color: ${cb.value};\\n  --heading-font: '${hf}', sans-serif;\\n  --body-font: '${bf}', sans-serif;\\n}`;
       navigator.clipboard.writeText(css).then(() => alert('Copied CSS to clipboard! Send this to the developer.'));
     };
   })();

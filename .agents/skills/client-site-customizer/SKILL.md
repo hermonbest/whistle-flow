@@ -56,8 +56,10 @@ Add or update the `:root` block at the top of the stylesheet with the extracted 
 :root {
   --primary-color: /* Extracted Primary Color */;
   --bg-color: /* Extracted Background Color */;
-  --text-color: /* Extracted Text Color */;
-  --font-family: /* Extracted Primary Font */, sans-serif;
+  --heading-color: /* Extracted Heading Color */;
+  --body-color: /* Extracted Body Text Color */;
+  --heading-font: /* Extracted Heading Font */, sans-serif;
+  --body-font: /* Extracted Body Font */, sans-serif;
   --card-bg: rgba(255, 255, 255, 0.05);
   --card-border: rgba(255, 255, 255, 0.1);
 }
@@ -66,19 +68,20 @@ Add or update the `:root` block at the top of the stylesheet with the extracted 
 Replace hardcoded instances:
 - Change button backgrounds to `var(--primary-color)`.
 - Change page background to `var(--bg-color)`.
-- Change heading and paragraph colors to `var(--text-color)`.
-- Change font-family rules to `var(--font-family)`.
+- Change headings color and font to `var(--heading-color)` and `var(--heading-font)`.
+- Change body text color and font to `var(--body-color)` and `var(--body-font)`.
 
 #### Critical Specificity Rule (Utility Classes & Tailwind):
 If the site uses Tailwind CSS or utility classes (`.text-white`, `.text-zinc-100`, `.text-zinc-400`), direct classes on child elements will silently override `body { color: var(--text-color); }`. 
 Apply this global root-cause override to `<style>`:
 ```css
 h1, h2, h3, h4, .text-white, .text-zinc-100, .text-zinc-200 {
-  color: var(--text-color) !important;
+  color: var(--heading-color) !important;
+  font-family: var(--heading-font) !important;
 }
 p, .text-zinc-300, .text-zinc-400, .text-zinc-500 {
-  color: var(--text-color) !important;
-  opacity: 0.82;
+  color: var(--body-color) !important;
+  font-family: var(--body-font);
 }
 .text-cyan-400, .text-cyan-300 {
   color: var(--primary-color) !important;
@@ -143,13 +146,41 @@ Inject the client review script right before `</body>`.
   if (savedConfig.bg) root.style.setProperty('--bg-color', savedConfig.bg);
   if (savedConfig.heading) root.style.setProperty('--heading-color', savedConfig.heading);
   if (savedConfig.body) root.style.setProperty('--body-color', savedConfig.body);
-  if (savedConfig.font) {
-    loadGoogleFont(savedConfig.font);
-    root.style.setProperty('--font-family', `'${savedConfig.font}', sans-serif`);
+  if (savedConfig.hf) {
+    loadGoogleFont(savedConfig.hf);
+    root.style.setProperty('--heading-font', `'${savedConfig.hf}', sans-serif`);
+  }
+  if (savedConfig.bf) {
+    loadGoogleFont(savedConfig.bf);
+    root.style.setProperty('--body-font', `'${savedConfig.bf}', sans-serif`);
   }
 
   // Stop execution for public visitors
   if (!isEditMode) return;
+
+  function fontFieldHtml(label, id) {
+    return `
+      <div style="margin-bottom: 8px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 3px;">
+          <label style="font-size: 10px; opacity: 0.8;">${label}</label>
+          <button id="${id}-tog" type="button" style="background: none; border: none; color: #22d3ee; cursor: pointer; font-size: 10px; padding: 0; text-decoration: underline;">+ Custom</button>
+        </div>
+        <select id="${id}-sel" style="width: 100%; box-sizing: border-box; padding: 5px; background: #1f2937; color: #fff; border: 1px solid rgba(255,255,255,0.2); border-radius: 6px; font-size: 11px;">
+          <option value="Geist">Geist (Modern Tech)</option>
+          <option value="Inter">Inter (Standard SaaS)</option>
+          <option value="Plus Jakarta Sans">Plus Jakarta Sans (Clean)</option>
+          <option value="Outfit">Outfit (Geometric)</option>
+          <option value="Space Grotesk">Space Grotesk (Neo-Brutal)</option>
+          <option value="Syne">Syne (Artistic Display)</option>
+          <option value="Playfair Display">Playfair Display (Editorial)</option>
+          <option value="Cinzel">Cinzel (Roman Luxury)</option>
+          <option value="Lora">Lora (Modern Serif)</option>
+          <option value="JetBrains Mono">JetBrains Mono (Monospace)</option>
+        </select>
+        <input type="text" id="${id}-inp" placeholder="Type Google font name..." style="display: none; width: 100%; box-sizing: border-box; padding: 5px; background: #1f2937; color: #fff; border: 1px solid rgba(255,255,255,0.2); border-radius: 6px; font-size: 11px;">
+      </div>
+    `;
+  }
 
   // Build the Client Review UI Dock
   const dock = document.createElement('div');
@@ -157,7 +188,7 @@ Inject the client review script right before `</body>`.
   dock.style.cssText = `
     position: fixed; bottom: 20px; right: 20px; z-index: 999999;
     background: #111827; color: #f9fafb; border: 1px solid rgba(255,255,255,0.2);
-    border-radius: 16px; padding: 18px; width: 330px; box-shadow: 0 16px 40px rgba(0,0,0,0.6);
+    border-radius: 16px; padding: 18px; width: 270px; box-shadow: 0 16px 40px rgba(0,0,0,0.6);
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 13px;
   `;
 
@@ -167,51 +198,29 @@ Inject the client review script right before `</body>`.
       <span style="font-size: 11px; color: #10b981; background: rgba(16,185,129,0.15); padding: 2px 6px; border-radius: 4px; font-weight: 600;">Client Review</span>
     </div>
 
-    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px;">
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px;">
       <div>
-        <label style="font-size: 11px; opacity: 0.8; display: block; margin-bottom: 4px;">Headings</label>
-        <input type="color" id="rev-heading" value="${savedConfig.heading || '#f4f4f5'}" style="width: 100%; height: 28px; border: none; cursor: pointer; background: none;">
+        <label style="font-size: 10px; opacity: 0.8; display: block; margin-bottom: 4px;">Headings Color</label>
+        <input type="color" id="rev-heading" value="${savedConfig.heading || '#f4f4f5'}" style="width: 100%; height: 26px; border: none; cursor: pointer; background: none;">
       </div>
       <div>
-        <label style="font-size: 11px; opacity: 0.8; display: block; margin-bottom: 4px;">Body Text</label>
-        <input type="color" id="rev-body" value="${savedConfig.body || '#a1a1aa'}" style="width: 100%; height: 28px; border: none; cursor: pointer; background: none;">
+        <label style="font-size: 10px; opacity: 0.8; display: block; margin-bottom: 4px;">Body Color</label>
+        <input type="color" id="rev-body" value="${savedConfig.body || '#a1a1aa'}" style="width: 100%; height: 26px; border: none; cursor: pointer; background: none;">
       </div>
       <div>
-        <label style="font-size: 11px; opacity: 0.8; display: block; margin-bottom: 4px;">Accent</label>
-        <input type="color" id="rev-primary" value="${savedConfig.primary || '#6366f1'}" style="width: 100%; height: 28px; border: none; cursor: pointer; background: none;">
+        <label style="font-size: 10px; opacity: 0.8; display: block; margin-bottom: 4px;">Accent</label>
+        <input type="color" id="rev-primary" value="${savedConfig.primary || '#6366f1'}" style="width: 100%; height: 26px; border: none; cursor: pointer; background: none;">
       </div>
       <div>
-        <label style="font-size: 11px; opacity: 0.8; display: block; margin-bottom: 4px;">Background</label>
-        <input type="color" id="rev-bg" value="${savedConfig.bg || '#0b0f19'}" style="width: 100%; height: 28px; border: none; cursor: pointer; background: none;">
+        <label style="font-size: 10px; opacity: 0.8; display: block; margin-bottom: 4px;">Background</label>
+        <input type="color" id="rev-bg" value="${savedConfig.bg || '#0b0f19'}" style="width: 100%; height: 26px; border: none; cursor: pointer; background: none;">
       </div>
     </div>
 
-    <div style="margin-bottom: 14px;">
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
-        <label style="font-size: 11px; opacity: 0.8;">Font Family</label>
-        <button id="rev-font-toggle" type="button" style="background: none; border: none; color: #22d3ee; cursor: pointer; font-size: 10px; padding: 0; text-decoration: underline;">+ Type Custom</button>
-      </div>
-      <select id="rev-font-select" style="width: 100%; box-sizing: border-box; padding: 7px; background: #1f2937; color: #fff; border: 1px solid rgba(255,255,255,0.2); border-radius: 6px; font-size: 12px;">
-        <option value="Geist">Geist (Modern Tech)</option>
-        <option value="Inter">Inter (Standard SaaS)</option>
-        <option value="Plus Jakarta Sans">Plus Jakarta Sans (Clean)</option>
-        <option value="Outfit">Outfit (Geometric)</option>
-        <option value="DM Sans">DM Sans (Minimal)</option>
-        <option value="Manrope">Manrope (Grotesque)</option>
-        <option value="Poppins">Poppins (Geometric Soft)</option>
-        <option value="Montserrat">Montserrat (Classic Bold)</option>
-        <option value="Space Grotesk">Space Grotesk (Neo-Brutal)</option>
-        <option value="Syne">Syne (Artistic Display)</option>
-        <option value="Playfair Display">Playfair Display (Editorial)</option>
-        <option value="Lora">Lora (Modern Serif)</option>
-        <option value="Cinzel">Cinzel (Roman Luxury)</option>
-        <option value="Cormorant Garamond">Cormorant Garamond (Elegance)</option>
-        <option value="JetBrains Mono">JetBrains Mono (Monospace)</option>
-      </select>
-      <input type="text" id="rev-font-input" placeholder="Type any Google font name..." style="display: none; width: 100%; box-sizing: border-box; padding: 7px; background: #1f2937; color: #fff; border: 1px solid rgba(255,255,255,0.2); border-radius: 6px; font-size: 12px;">
-    </div>
+    ${fontFieldHtml('Headings Font', 'rev-hf')}
+    ${fontFieldHtml('Body Text Font', 'rev-bf')}
 
-    <button id="rev-copy-btn" style="width: 100%; background: var(--primary-color, #6366f1); color: #fff; font-weight: 700; border: none; border-radius: 8px; padding: 10px; cursor: pointer; font-size: 12px; transition: filter 0.2s;">
+    <button id="rev-copy-btn" style="width: 100%; background: var(--primary-color, #6366f1); color: #fff; font-weight: 700; border: none; border-radius: 8px; padding: 9px; cursor: pointer; font-size: 12px; transition: filter 0.2s; margin-top: 4px;">
       📋 Copy Final Approved Style
     </button>
   `;
@@ -222,57 +231,63 @@ Inject the client review script right before `</body>`.
   const bInput = document.getElementById('rev-body');
   const pInput = document.getElementById('rev-primary');
   const bgInput = document.getElementById('rev-bg');
-  const fSel = document.getElementById('rev-font-select');
-  const fInp = document.getElementById('rev-font-input');
-  const fTog = document.getElementById('rev-font-toggle');
-  let isCustom = false;
 
-  if (savedConfig.font) {
-    if ([...fSel.options].some(o => o.value === savedConfig.font)) {
-      fSel.value = savedConfig.font;
-    } else {
-      isCustom = true;
-      fSel.style.display = 'none';
-      fInp.style.display = 'block';
-      fInp.value = savedConfig.font;
-      fTog.innerText = '← Pick list';
+  function wireFont(id, savedVal) {
+    const sel = document.getElementById(`${id}-sel`), inp = document.getElementById(`${id}-inp`), tog = document.getElementById(`${id}-tog`);
+    let isCustom = false;
+    if (savedVal) {
+      if ([...sel.options].some(o => o.value === savedVal)) {
+        sel.value = savedVal;
+      } else {
+        isCustom = true;
+        sel.style.display = 'none';
+        inp.style.display = 'block';
+        inp.value = savedVal;
+        tog.innerText = '← List';
+      }
     }
+    tog.onclick = function() {
+      isCustom = !isCustom;
+      sel.style.display = isCustom ? 'none' : 'block';
+      inp.style.display = isCustom ? 'block' : 'none';
+      tog.innerText = isCustom ? '← List' : '+ Custom';
+      if (isCustom) inp.focus();
+      updateTokens();
+    };
+    sel.addEventListener('change', updateTokens);
+    inp.addEventListener('input', updateTokens);
+    return () => (isCustom ? inp.value : sel.value).trim();
   }
 
-  fTog.onclick = function() {
-    isCustom = !isCustom;
-    fSel.style.display = isCustom ? 'none' : 'block';
-    fInp.style.display = isCustom ? 'block' : 'none';
-    fTog.innerText = isCustom ? '← Pick list' : '+ Type Custom';
-    if (isCustom) fInp.focus();
-    updateTokens();
-  };
+  const getHf = wireFont('rev-hf', savedConfig.hf || 'Geist');
+  const getBf = wireFont('rev-bf', savedConfig.bf || 'Geist');
 
   function updateTokens() {
-    const font = (isCustom ? fInp.value : fSel.value).trim();
-    if (font) loadGoogleFont(font);
+    const hf = getHf(), bf = getBf();
+    if (hf) loadGoogleFont(hf);
+    if (bf) loadGoogleFont(bf);
     const config = {
       heading: hInput.value,
       body: bInput.value,
       primary: pInput.value,
       bg: bgInput.value,
-      font: font
+      hf,
+      bf
     };
     root.style.setProperty('--heading-color', config.heading);
     root.style.setProperty('--body-color', config.body);
     root.style.setProperty('--primary-color', config.primary);
     root.style.setProperty('--bg-color', config.bg);
-    if (font) root.style.setProperty('--font-family', `'${font}', sans-serif`);
+    if (hf) root.style.setProperty('--heading-font', `'${hf}', sans-serif`);
+    if (bf) root.style.setProperty('--body-font', `'${bf}', sans-serif`);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(config));
   }
 
   [hInput, bInput, pInput, bgInput].forEach(el => el.addEventListener('input', updateTokens));
-  fSel.addEventListener('change', updateTokens);
-  fInp.addEventListener('input', updateTokens);
 
   document.getElementById('rev-copy-btn').addEventListener('click', function() {
-    const font = (isCustom ? fInp.value : fSel.value).trim();
-    const cssSnippet = `/* Final Approved Client Brand Tokens */\n:root {\n  --heading-color: ${hInput.value};\n  --body-color: ${bInput.value};\n  --primary-color: ${pInput.value};\n  --bg-color: ${bgInput.value};\n  --font-family: '${font}', sans-serif;\n}`;
+    const hf = getHf(), bf = getBf();
+    const cssSnippet = `/* Final Approved Client Brand Tokens */\n:root {\n  --heading-color: ${hInput.value};\n  --body-color: ${bInput.value};\n  --primary-color: ${pInput.value};\n  --bg-color: ${bgInput.value};\n  --heading-font: '${hf}', sans-serif;\n  --body-font: '${bf}', sans-serif;\n}`;
     navigator.clipboard.writeText(cssSnippet).then(() => {
       const origText = this.innerText;
       this.innerText = '✅ Copied to Clipboard!';
