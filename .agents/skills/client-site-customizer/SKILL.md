@@ -187,17 +187,33 @@ Inject the client review script right before `</body>`.
     </div>
 
     <div style="margin-bottom: 14px;">
-      <label style="font-size: 11px; opacity: 0.8; display: block; margin-bottom: 4px;">Font Style (Loads On-Demand)</label>
-      <select id="rev-font" style="width: 100%; padding: 7px; background: #1f2937; color: #fff; border: 1px solid rgba(255,255,255,0.2); border-radius: 6px; font-size: 12px;">
-        <option value="Geist">Geist (Modern Tech)</option>
-        <option value="Inter">Inter (Standard SaaS)</option>
-        <option value="Plus Jakarta Sans">Plus Jakarta Sans (Clean)</option>
-        <option value="Outfit">Outfit (Geometric)</option>
-        <option value="Space Grotesk">Space Grotesk (Neo-Brutal)</option>
-        <option value="Syne">Syne (Artistic Display)</option>
-        <option value="Playfair Display">Playfair Display (Editorial)</option>
-        <option value="Lora">Lora (Modern Serif)</option>
-      </select>
+      <label style="font-size: 11px; opacity: 0.8; display: block; margin-bottom: 4px;">Font (Pick or type ANY Google font)</label>
+      <input list="cr-fonts" id="rev-font" value="${savedConfig.font || 'Geist'}" placeholder="Type any Google Font..." style="width: 100%; box-sizing: border-box; padding: 7px; background: #1f2937; color: #fff; border: 1px solid rgba(255,255,255,0.2); border-radius: 6px; font-size: 12px;">
+      <datalist id="cr-fonts">
+        <option value="Geist">
+        <option value="Inter">
+        <option value="Plus Jakarta Sans">
+        <option value="Outfit">
+        <option value="DM Sans">
+        <option value="Manrope">
+        <option value="Poppins">
+        <option value="Montserrat">
+        <option value="Roboto">
+        <option value="Open Sans">
+        <option value="Space Grotesk">
+        <option value="Syne">
+        <option value="Bricolage Grotesque">
+        <option value="Oswald">
+        <option value="Bebas Neue">
+        <option value="Playfair Display">
+        <option value="Lora">
+        <option value="Cinzel">
+        <option value="Cormorant Garamond">
+        <option value="Merriweather">
+        <option value="Bodoni Moda">
+        <option value="JetBrains Mono">
+        <option value="Fira Code">
+      </datalist>
     </div>
 
     <button id="rev-copy-btn" style="width: 100%; background: var(--primary-color, #6366f1); color: #fff; font-weight: 700; border: none; border-radius: 8px; padding: 10px; cursor: pointer; font-size: 12px; transition: filter 0.2s;">
