@@ -125,11 +125,28 @@ Inject the client review script right before `</body>`.
   const savedConfig = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
   const root = document.documentElement;
 
+  // Dynamic Google Font Loader (Loads only chosen font on-demand)
+  function loadGoogleFont(font) {
+    if (!font || font.includes('system-ui')) return;
+    let link = document.getElementById('cr-dyn-font');
+    if (!link) {
+      link = document.createElement('link');
+      link.id = 'cr-dyn-font';
+      link.rel = 'stylesheet';
+      document.head.appendChild(link);
+    }
+    link.href = 'https://fonts.googleapis.com/css2?family=' + encodeURIComponent(font) + ':wght@400;600;700;800&display=swap';
+  }
+
   // Apply saved values immediately on load
   if (savedConfig.primary) root.style.setProperty('--primary-color', savedConfig.primary);
   if (savedConfig.bg) root.style.setProperty('--bg-color', savedConfig.bg);
-  if (savedConfig.text) root.style.setProperty('--text-color', savedConfig.text);
-  if (savedConfig.font) root.style.setProperty('--font-family', `'${savedConfig.font}', sans-serif`);
+  if (savedConfig.heading) root.style.setProperty('--heading-color', savedConfig.heading);
+  if (savedConfig.body) root.style.setProperty('--body-color', savedConfig.body);
+  if (savedConfig.font) {
+    loadGoogleFont(savedConfig.font);
+    root.style.setProperty('--font-family', `'${savedConfig.font}', sans-serif`);
+  }
 
   // Stop execution for public visitors
   if (!isEditMode) return;
@@ -150,28 +167,36 @@ Inject the client review script right before `</body>`.
       <span style="font-size: 11px; color: #10b981; background: rgba(16,185,129,0.15); padding: 2px 6px; border-radius: 4px; font-weight: 600;">Client Review</span>
     </div>
 
-    <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-bottom: 12px;">
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px;">
       <div>
-        <label style="font-size: 11px; opacity: 0.8; display: block; margin-bottom: 4px;">Primary</label>
-        <input type="color" id="rev-primary" value="${savedConfig.primary || getComputedStyle(root).getPropertyValue('--primary-color').trim() || '#6366f1'}" style="width: 100%; height: 32px; border: none; cursor: pointer; background: none;">
+        <label style="font-size: 11px; opacity: 0.8; display: block; margin-bottom: 4px;">Headings</label>
+        <input type="color" id="rev-heading" value="${savedConfig.heading || '#f4f4f5'}" style="width: 100%; height: 28px; border: none; cursor: pointer; background: none;">
+      </div>
+      <div>
+        <label style="font-size: 11px; opacity: 0.8; display: block; margin-bottom: 4px;">Body Text</label>
+        <input type="color" id="rev-body" value="${savedConfig.body || '#a1a1aa'}" style="width: 100%; height: 28px; border: none; cursor: pointer; background: none;">
+      </div>
+      <div>
+        <label style="font-size: 11px; opacity: 0.8; display: block; margin-bottom: 4px;">Accent</label>
+        <input type="color" id="rev-primary" value="${savedConfig.primary || '#6366f1'}" style="width: 100%; height: 28px; border: none; cursor: pointer; background: none;">
       </div>
       <div>
         <label style="font-size: 11px; opacity: 0.8; display: block; margin-bottom: 4px;">Background</label>
-        <input type="color" id="rev-bg" value="${savedConfig.bg || getComputedStyle(root).getPropertyValue('--bg-color').trim() || '#0b0f19'}" style="width: 100%; height: 32px; border: none; cursor: pointer; background: none;">
-      </div>
-      <div>
-        <label style="font-size: 11px; opacity: 0.8; display: block; margin-bottom: 4px;">Text Color</label>
-        <input type="color" id="rev-text" value="${savedConfig.text || getComputedStyle(root).getPropertyValue('--text-color').trim() || '#f3f4f6'}" style="width: 100%; height: 32px; border: none; cursor: pointer; background: none;">
+        <input type="color" id="rev-bg" value="${savedConfig.bg || '#0b0f19'}" style="width: 100%; height: 28px; border: none; cursor: pointer; background: none;">
       </div>
     </div>
 
     <div style="margin-bottom: 14px;">
-      <label style="font-size: 11px; opacity: 0.8; display: block; margin-bottom: 4px;">Font Style</label>
+      <label style="font-size: 11px; opacity: 0.8; display: block; margin-bottom: 4px;">Font Style (Loads On-Demand)</label>
       <select id="rev-font" style="width: 100%; padding: 7px; background: #1f2937; color: #fff; border: 1px solid rgba(255,255,255,0.2); border-radius: 6px; font-size: 12px;">
-        <option value="Plus Jakarta Sans">Plus Jakarta Sans (Modern Clean)</option>
+        <option value="Geist">Geist (Modern Tech)</option>
         <option value="Inter">Inter (Standard SaaS)</option>
-        <option value="Playfair Display">Playfair Display (Luxury Editorial)</option>
-        <option value="Space Grotesk">Space Grotesk (Tech Brutalist)</option>
+        <option value="Plus Jakarta Sans">Plus Jakarta Sans (Clean)</option>
+        <option value="Outfit">Outfit (Geometric)</option>
+        <option value="Space Grotesk">Space Grotesk (Neo-Brutal)</option>
+        <option value="Syne">Syne (Artistic Display)</option>
+        <option value="Playfair Display">Playfair Display (Editorial)</option>
+        <option value="Lora">Lora (Modern Serif)</option>
       </select>
     </div>
 
