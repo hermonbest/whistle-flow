@@ -1,6 +1,6 @@
 # 🎙️ Whistle Flow
 
-An ambient, lightweight, ultra-fast local voice dictation pill for Windows — inspired by the design and fluid physics of **Wispr Flow**, powered on-device with **INT8 Vector Acceleration** (`faster-whisper` + Whistle).
+An ambient, lightweight, ultra-fast local voice dictation pill for Windows — inspired by the design and fluid physics of **Wispr Flow**, powered on-device with **INT8 Vector Acceleration** (`faster-whisper` via CTranslate2).
 
 Speak into any application on your machine and have your words transcribed and typed into your active text box in under **half a second** after releasing the key — with **zero cloud dependencies** and **no focus loss**.
 
@@ -51,7 +51,7 @@ Whistle Flow went through three generational performance evolutions to reach sub
 | Evolution Phase | Sentence Latency (15s Audio) | Primary Bottleneck Solved |
 | :--- | :--- | :--- |
 | **Phase 1: Naive Streaming + Cloud Checks** | ~27.0 seconds | Secret Hugging Face network timeouts (15-20s) and thread mutex deadlocks |
-| **Phase 2: Offline Single-Pass (Whistle)** | ~7.1 seconds | Cut background queue overhead; ran 100% locally on CPU |
+| **Phase 2: Offline Single-Pass (Standard Whisper)** | ~7.1 seconds | Cut background queue overhead; ran 100% locally on CPU |
 | **Phase 3: INT8 Vector Acceleration (Current)** | **~0.5 seconds** | **13× speedup** using Intel AVX-512 VNNI hardware integer instructions |
 
 ### The 3 Core Engineering Breakthroughs
@@ -66,7 +66,7 @@ Whistle Flow went through three generational performance evolutions to reach sub
 
 #### 3. 100% Offline Mode (Zero Network Blocking)
 - **The Problem:** Hugging Face Hub was secretly checking `config.json` over HTTPS before allowing inference to proceed, stalling execution when unauthenticated or throttled.
-- **The Fix:** Model weights are pinned locally on disk, and `HF_HUB_OFFLINE=1`, `DO_NOT_TRACK=1`, and `NEEDLE_TELEMETRY=0` are strictly enforced before engine import.
+- **The Fix:** Model weights are pinned locally on disk, and `HF_HUB_OFFLINE=1` and `DO_NOT_TRACK=1` are strictly enforced before engine import.
 
 ---
 
@@ -182,8 +182,10 @@ Tests cover:
 ├── LICENSE             # MIT License
 ├── README.md           # Documentation
 ├── SPEC.md             # Technical design specification
+├── install_startup.bat # 1-click startup installer forwarder
 ├── requirements.txt    # Pinned production dependencies
 ├── run_pill.vbs        # Background Windows script host launcher
+├── setup_autostart.py  # Headless registry & autostart configurator
 ├── whisper_flow.py     # Main application engine
 ├── docs/
 │   └── active_context.md # Development history and context
