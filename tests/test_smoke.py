@@ -1,18 +1,7 @@
 import os
 from pathlib import Path
-
-os.environ["NEEDLE_TELEMETRY"] = "0"
-os.environ["DO_NOT_TRACK"] = "1"
-os.environ["HF_HUB_OFFLINE"] = "1"
-os.environ["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1"
-
-weights_cache = Path.home() / ".cache" / "cactus-needle" / "whistle" / "2.0.0" / "whistle.cact"
-if weights_cache.exists():
-    os.environ["NEEDLE_WHISTLE_WEIGHTS"] = str(weights_cache)
-
 import unittest
 import numpy as np
-import needle
 
 class PttController:
     HOLD_THRESHOLD = 0.30
@@ -51,13 +40,6 @@ class PttController:
         self.is_locked = False
 
 class TestWhistleFlowSmoke(unittest.TestCase):
-    def test_needle_transcription_warm(self):
-        """Verify needle model can transcribe 16 kHz silent array without crashing."""
-        sample_rate = 16000
-        silence = np.zeros(sample_rate, dtype=np.float32)
-        result = needle.transcribe(silence)
-        self.assertIsInstance(result, dict)
-        self.assertIn("text", result)
 
     def test_layered_surface_structure(self):
         """Verify image processing pipeline handles Pillow RGBA composites."""

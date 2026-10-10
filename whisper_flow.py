@@ -5,22 +5,10 @@ import time
 import queue
 import logging
 import threading
-import winsound
 import subprocess
 import ctypes
 from ctypes import wintypes
 from pathlib import Path
-
-# Enforce 100% offline mode BEFORE importing needle to kill Hugging Face network timeouts
-os.environ["NEEDLE_TELEMETRY"] = "0"
-os.environ["DO_NOT_TRACK"] = "1"
-os.environ["HF_HUB_OFFLINE"] = "1"
-os.environ["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1"
-
-# Explicitly pin local weights to bypass any HF Hub download/check
-weights_cache = Path.home() / ".cache" / "cactus-needle" / "whistle" / "2.0.0" / "whistle.cact"
-if weights_cache.exists():
-    os.environ["NEEDLE_WHISTLE_WEIGHTS"] = str(weights_cache)
 
 LOG_FILE = Path(__file__).resolve().parent / "whisper_flow.log"
 logging.basicConfig(
@@ -30,7 +18,7 @@ logging.basicConfig(
     datefmt="%Y-%m-%d %H:%M:%S"
 )
 logger = logging.getLogger("whistle_flow")
-logger.info("Whistle Flow engine initialized in 100% offline mode.")
+logger.info("Whistle Flow engine initialized.")
 
 import numpy as np
 import sounddevice as sd
@@ -38,7 +26,6 @@ import tkinter as tk
 import keyboard
 from PIL import Image, ImageDraw, ImageFilter
 from faster_whisper import WhisperModel
-import needle
 
 # ---------------------------------------------------------------------------
 # Windows plumbing (DPI awareness + per-pixel-alpha layered window)
@@ -475,7 +462,7 @@ class WisprPillApp:
                 list(segments)
                 logger.info("Faster-Whisper INT8 model loaded successfully.")
             except Exception as e2:
-                logger.error(f"Faster-Whisper fallback to needle: {e2}")
+                logger.error(f"Faster-Whisper load error: {e2}")
 
     def track_focus(self):
         fg = user32.GetForegroundWindow()
@@ -564,9 +551,6 @@ class WisprPillApp:
                         if self.model is not None:
                             segments, _ = self.model.transcribe(trimmed, language="en", beam_size=1)
                             text = " ".join(s.text.strip() for s in segments if s.text).strip()
-                        else:
-                            res = needle.transcribe(trimmed, language="en")
-                            text = (res.get("text") or "").strip()
                         decode_ms = (time.perf_counter() - t_decode_start) * 1000
                         logger.info(f"Decoded in {decode_ms:.1f}ms: '{text}'")
                     except Exception as err:
