@@ -1,18 +1,19 @@
 # Active Context
 
 ## Current Status
-Re-designed and implemented the pixel-perfect Wispr Flow floating transparent pill widget matching the user's reference design.
+Replaced the interface with the requested per-pixel alpha layered window implementation (`UpdateLayeredWindow` + PIL supersampling + DIBSection + spring physics).
 
 ## Completed Milestones
 - **2026-10-10:** Verified Python 3.11 and installed `cactus-needle` 3.1.4.
-- **2026-10-10:** Downloaded Whistle model (16.9 MB) and validated local STT transcription on Windows (~80ms warm latency).
-- **2026-10-10:** Implemented Wispr Flow floating pill design:
-  - Transparent chroma-keying (`-transparentcolor`) so only the rounded capsule floats on screen
-  - Crisp solid white outer border with dark matte `#1c1c1e` capsule interior
-  - 9 animated sound dots (`• • • • • • • • •`) stretching into dynamic harmonic waveforms with voice volume
-  - Hotkey toggle (<kbd>F8</kbd> or <kbd>Ctrl+Shift+Space</kbd>) or 1-click toggle on the pill
-  - Click-and-drag anywhere on the screen
-  - Auto-paste via clipboard into focused window with simulated `Ctrl+V`
+- **2026-10-10:** Implemented layered window Wispr Flow design:
+  - True Windows per-pixel alpha rendering (`UpdateLayeredWindow`, GDI DIBSection)
+  - Gaussian blur soft drop shadow & dynamic glow
+  - 3x supersampling anti-aliased PIL rendering
+  - Spring-damper physics for smooth expansion from idle (70x26) to active (190x46)
+  - 21 dynamic audio waveform bars with harmonic envelope, breathing animation, and aurora gradient transitions
+  - Never-steals-focus window style (`WS_EX_NOACTIVATE | WS_EX_LAYERED | WS_EX_TOOLWINDOW`)
+  - Auto-paste via clipboard and simulated `Ctrl+V`
+  - Hotkey toggle (<kbd>F8</kbd>, <kbd>Ctrl+Shift+Space</kbd>, <kbd>Esc</kbd> to cancel) and click-drag
 
 ## Immediate Next Steps
-- Verify user experience with the new floating pill aesthetics and responsiveness.
+- Verify live user interaction with the spring-animated layered pill.
