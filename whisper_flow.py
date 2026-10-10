@@ -150,6 +150,76 @@ class LayeredSurface:
 # ---------------------------------------------------------------------------
 SAMPLE_RATE = 16000
 
+class AudioMuter:
+    """Mutes background application audio sessions while recording and restores them on finish."""
+
+    def __init__(self):
+        self.muted_controls = []
+        self._lock = threading.Lock()
+
+    def mute_others(self):
+        with self._lock:
+            # If already muted, avoid double muting or losing tracking
+            if self.muted_controls:
+                return
+            try:
+                import comtypes
+                from pycaw.pycaw import AudioUtilities, ISimpleAudioVolume
+                comtypes.CoInitialize()
+                my_pid = os.getpid()
+                sessions = AudioUtilities.GetAllSessions()
+                for session in sessions:
+                    try:
+                        proc = session.Process
+                        if proc and proc.pid == my_pid:
+                            continue
+                        vol = session._ctl.QueryInterface(ISimpleAudioVolume)
+                        if vol.GetMute() == 0:
+                            vol.SetMute(1, None)
+                            self.muted_controls.append(vol)
+                    except Exception:
+                        pass
+                logger.info(f"Muted {len(self.muted_controls)} background audio session(s).")
+            except Exception as e:
+                logger.warning(f"AudioMuter mute error: {e}")
+
+    def unmute_all(self):
+        with self._lock:
+            if not self.muted_controls:
+                return
+            count = 0
+            for vol in self.muted_controls:
+                try:
+                    vol.SetMute(0, None)
+                    count += 1
+                except Exception:
+                    pass
+            self.muted_controls.clear()
+            logger.info(f"Restored/unmuted {count} background audio session(s).")
+
+
+def play_click(kind: str = "start"):
+    """Plays a soft, pleasant tactile click via sounddevice instead of harsh winsound motherboard beeps."""
+    def _run():
+        try:
+            if kind == "start":
+                freq, duration, volume = 1350, 0.016, 0.08
+            elif kind == "stop":
+                freq, duration, volume = 850, 0.018, 0.07
+            else:  # cancel / error
+                freq, duration, volume = 480, 0.022, 0.06
+
+            t = np.linspace(0, duration, int(SAMPLE_RATE * duration), endpoint=False)
+            decay = np.exp(-t * 220)
+            wave = (np.sin(2 * np.pi * freq * t) * decay * volume).astype(np.float32)
+            sd.play(wave, samplerate=SAMPLE_RATE)
+            sd.wait()
+        except Exception:
+            pass
+
+    threading.Thread(target=_run, daemon=True).start()
+
+
 def trim_silence(audio: np.ndarray, sample_rate: int = 16000, threshold_db: float = -46.0) -> np.ndarray:
     """Trims leading and trailing silence using RMS energy gating."""
     if len(audio) == 0:
@@ -311,6 +381,7 @@ class WisprPillApp:
         self.level_raw = 0.0
         self.done_t = None  # perf_counter timestamp of last successful paste
         self.model = None
+        self.audio_muter = AudioMuter()
 
         # PTT Controller (<kbd>Ctrl + Space</kbd>)
         self.ptt = PttController(on_start=self.start_recording, on_stop=self.stop_and_paste)
@@ -414,19 +485,15 @@ class WisprPillApp:
         user32.SetWindowPos(self.hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE)
         self.root.after(500, self.track_focus)
 
-    def play_sound(self, freq, duration):
-        def _b():
-            try:
-                winsound.Beep(freq, duration)
-            except Exception:
-                pass
-        threading.Thread(target=_b, daemon=True).start()
+    def play_sound(self, kind: str = "start"):
+        play_click(kind)
 
     def start_recording(self):
         if self.is_transcribing:
             return
         self.done_t = None
-        self.play_sound(1300, 70)
+        self.audio_muter.mute_others()
+        self.play_sound("start")
         logger.info("Recording started.")
 
         # Clear audio queue
@@ -461,17 +528,19 @@ class WisprPillApp:
             self.ptt.cancel()
             self.level_raw = 0.0
             self._close_stream()
+            self.audio_muter.unmute_all()
             while not self.audio_queue.empty():
                 self.audio_queue.get_nowait()
-            self.play_sound(500, 60)
+            self.play_sound("cancel")
             logger.info("Recording cancelled by user.")
 
     def stop_and_paste(self):
         t_release = time.perf_counter()
         self.is_transcribing = True
         self.level_raw = 0.0
-        self.play_sound(750, 70)
         self._close_stream()
+        self.audio_muter.unmute_all()
+        self.play_sound("stop")
 
         target = self.last_target_hwnd
 

@@ -10,6 +10,8 @@ Speak into any application on your machine and have your words transcribed and t
 
 - **Ambient Layered Capsule UI:** Pixel-perfect floating capsule using Windows per-pixel alpha (`UpdateLayeredWindow`), GDI DIBSection, and soft Gaussian drop shadows.
 - **Push-To-Talk & Tap-To-Lock:** Hold <kbd>Ctrl</kbd> + <kbd>Space</kbd> to talk, release to paste. Quick tap locks into hands-free mode.
+- **Background Audio Muting (`pycaw`):** Automatically mutes other background audio sessions (Spotify, YouTube, Discord, Edge, Telegram) while recording is active, restoring their volume instantly upon completion or cancellation.
+- **Soft Tactile Audio Clicks:** Replaced harsh motherboard `winsound.Beep` tones with subtle, low-volume exponential-decay tactile clicks synthesized via `sounddevice`.
 - **Hardware INT8 Vector Acceleration:** Uses Intel AVX-512 VNNI neural vector instructions via `faster-whisper` (CTranslate2 INT8) to decode 15 seconds of speech in just **`~500 ms`**!
 - **Dynamic Silence Trimming:** Energy-based RMS silence gating trims dead air to avoid Whisper hallucinations on quiet speech and keep latency ultra-low.
 - **Spring-Damper Dynamics:** Smooth, elastic animation that expands from a compact idle pill ($70 \times 26\text{px}$) to an active dictation bar ($190 \times 46\text{px}$) with natural physics.

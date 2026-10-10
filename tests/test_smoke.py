@@ -109,5 +109,27 @@ class TestWhistleFlowSmoke(unittest.TestCase):
         res_list = list(segments)
         self.assertIsInstance(res_list, list)
 
+    def test_audio_muter_lifecycle(self):
+        """Verify AudioMuter mute and unmute calls succeed without unhandled exceptions."""
+        from whisper_flow import AudioMuter
+        muter = AudioMuter()
+        # Test mute
+        muter.mute_others()
+        # Test unmute
+        muter.unmute_all()
+        self.assertEqual(len(muter.muted_controls), 0)
+
+    def test_click_waveform_generation(self):
+        """Verify tactile click waveform is synthesized cleanly within bounds."""
+        freq, duration, volume = 1350, 0.016, 0.08
+        sample_rate = 16000
+        t = np.linspace(0, duration, int(sample_rate * duration), endpoint=False)
+        decay = np.exp(-t * 220)
+        wave = (np.sin(2 * np.pi * freq * t) * decay * volume).astype(np.float32)
+        self.assertGreater(len(wave), 0)
+        self.assertLessEqual(np.max(np.abs(wave)), 0.10)
+        self.assertEqual(wave.dtype, np.float32)
+
 if __name__ == "__main__":
     unittest.main()
+
