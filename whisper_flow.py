@@ -1,18 +1,36 @@
 import os
-
-# Must be set BEFORE importing needle so telemetry is actually off
-os.environ["NEEDLE_TELEMETRY"] = "0"
-os.environ["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1"
-
 import sys
 import math
 import time
 import queue
+import logging
 import threading
 import winsound
 import subprocess
 import ctypes
 from ctypes import wintypes
+from pathlib import Path
+
+# Enforce 100% offline mode BEFORE importing needle to kill Hugging Face network timeouts
+os.environ["NEEDLE_TELEMETRY"] = "0"
+os.environ["DO_NOT_TRACK"] = "1"
+os.environ["HF_HUB_OFFLINE"] = "1"
+os.environ["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1"
+
+# Explicitly pin local weights to bypass any HF Hub download/check
+weights_cache = Path.home() / ".cache" / "cactus-needle" / "whistle" / "2.0.0" / "whistle.cact"
+if weights_cache.exists():
+    os.environ["NEEDLE_WHISTLE_WEIGHTS"] = str(weights_cache)
+
+LOG_FILE = Path(__file__).resolve().parent / "whisper_flow.log"
+logging.basicConfig(
+    filename=str(LOG_FILE),
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S"
+)
+logger = logging.getLogger("whistle_flow")
+logger.info("Whistle Flow engine initialized in 100% offline mode.")
 
 import numpy as np
 import sounddevice as sd
@@ -406,6 +424,7 @@ class WisprPillApp:
             return
         self.done_t = None
         self.play_sound(1300, 70)
+        logger.info("Recording started (mic stream opened).")
 
         # Clear audio queues
         while not self.audio_queue.empty():
@@ -421,14 +440,11 @@ class WisprPillApp:
         # Start live streaming consumer in background
         def streaming_consumer():
             def chunk_generator():
-                while self.stream_active or not self.stream_chunks_queue.empty():
-                    try:
-                        chunk = self.stream_chunks_queue.get(timeout=0.1)
-                        if chunk is None:
-                            break
-                        yield chunk
-                    except queue.Empty:
-                        continue
+                while True:
+                    chunk = self.stream_chunks_queue.get()
+                    if chunk is None:
+                        break
+                    yield chunk
 
             parts = []
             try:
@@ -437,8 +453,10 @@ class WisprPillApp:
                         if not res:
                             continue
                         txt = (res.get("text") or "").strip()
+                        pass_ms = res.get("pass_ms", 0.0)
                         if txt:
                             parts.append(txt)
+                            logger.info(f"Stream chunk committed ({pass_ms:.1f}ms): '{txt}'")
                         pend = (res.get("pending") or "").strip()
                         if pend:
                             self.last_pending = pend
@@ -447,10 +465,12 @@ class WisprPillApp:
                     # If stream finishes and pending text wasn't committed yet:
                     if self.last_pending and self.last_pending not in parts:
                         parts.append(self.last_pending)
+                        logger.info(f"Stream tail finalized pending: '{self.last_pending}'")
             except Exception as err:
-                print(f"[!] Streaming consumer error: {err}")
+                logger.error(f"Streaming consumer error: {err}", exc_info=True)
             finally:
                 self.accumulated_text = " ".join(p for p in parts if p).strip()
+                logger.info(f"Stream consumer finished. Accumulated text: '{self.accumulated_text}'")
 
         self.stream_thread = threading.Thread(target=streaming_consumer, daemon=True)
         self.stream_thread.start()
@@ -497,8 +517,10 @@ class WisprPillApp:
             self.level_raw = 0.0
             self._close_stream()
             self.play_sound(500, 60)
+            logger.info("Recording cancelled by user.")
 
     def stop_and_paste(self):
+        t_stop_start = time.perf_counter()
         self.is_transcribing = True
         self.stream_active = False
         self.level_raw = 0.0
@@ -506,22 +528,28 @@ class WisprPillApp:
         self._close_stream()
 
         # Flush any remaining audio in buffer_acc to stream queue so no tail speech is lost
+        flushed_len = 0
         if self.buffer_acc:
             tail = np.concatenate(self.buffer_acc[:])
+            flushed_len = len(tail)
             self.buffer_acc.clear()
-            if len(tail) > 0:
+            if flushed_len > 0:
                 self.stream_chunks_queue.put(tail)
         self.stream_chunks_queue.put(None)
+        logger.info(f"Key released. Flushed {flushed_len} tail samples ({flushed_len/SAMPLE_RATE:.2f}s). Draining stream worker...")
 
         target = self.last_target_hwnd
 
         def _worker():
             pasted = False
+            t_drain_start = time.perf_counter()
             # Allow streaming worker to fully drain remaining chunks and finalize the tail
             if self.stream_thread and self.stream_thread.is_alive():
-                self.stream_thread.join(timeout=4.0)
+                self.stream_thread.join(timeout=2.0)
+            drain_ms = (time.perf_counter() - t_drain_start) * 1000
 
             text = self.accumulated_text.strip()
+            logger.info(f"Worker unblocked in {drain_ms:.1f}ms. Total decoded text: '{text}'")
 
             # If streaming produced little or no text, fallback to batch transcribe with trimmed silence
             if not text:
@@ -534,26 +562,31 @@ class WisprPillApp:
                     trimmed = trim_silence(audio)
                     if len(trimmed) >= int(SAMPLE_RATE * 0.3):
                         try:
+                            t_fb_start = time.perf_counter()
                             with self.needle_lock:
                                 res = needle.transcribe(trimmed)
                                 text = (res.get("text") or "").strip()
+                            logger.info(f"Fallback transcribe finished in {(time.perf_counter() - t_fb_start)*1000:.1f}ms: '{text}'")
                         except Exception as err:
-                            print(f"[!] STT fallback error: {err}")
+                            logger.error(f"STT fallback error: {err}", exc_info=True)
 
             if text:
+                t_paste_start = time.perf_counter()
                 subprocess.run(["clip"], input=text.encode("utf-16le"), check=True)
                 if target and user32.IsWindow(target):
                     try:
                         user32.SetForegroundWindow(target)
                     except Exception:
                         pass
-                time.sleep(0.06)
+                time.sleep(0.04)
                 # Inject Ctrl + V
                 user32.keybd_event(0x11, 0, 0, 0)
                 user32.keybd_event(0x56, 0, 0, 0)
                 user32.keybd_event(0x56, 0, 0x0002, 0)
                 user32.keybd_event(0x11, 0, 0x0002, 0)
                 pasted = True
+                total_latency_ms = (time.perf_counter() - t_stop_start) * 1000
+                logger.info(f"Pasted text to target in {(time.perf_counter() - t_paste_start)*1000:.1f}ms. Total latency from key release: {total_latency_ms:.1f}ms")
 
             time.sleep(0.08)
             if pasted:
