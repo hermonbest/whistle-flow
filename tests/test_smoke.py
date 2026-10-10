@@ -88,5 +88,15 @@ class TestWhistleFlowSmoke(unittest.TestCase):
         self.assertEqual(len(stopped), 1)
         self.assertFalse(ptt.is_recording)
 
+    def test_streaming_long_audio_drains_cleanly(self):
+        """Verify needle.stream drains long audio chunks (e.g. 5 seconds) without hanging or crashing."""
+        sample_rate = 16000
+        def chunk_gen():
+            for _ in range(5):
+                yield np.zeros(sample_rate, dtype=np.float32)
+        results = list(needle.stream(chunk_gen()))
+        self.assertGreaterEqual(len(results), 5)
+        self.assertIn("text", results[-1])
+
 if __name__ == "__main__":
     unittest.main()

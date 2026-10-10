@@ -14,7 +14,8 @@ Implemented and verified:
 - **2026-10-10:** Integrated Windows named single-instance mutex (`WhistleFlowSingleInstanceMutex`) preventing duplicate colliding processes.
 - **2026-10-10:** Configured ambient auto-launch on boot via Windows Startup folder (`Whistle_Flow.vbs`).
 - **2026-10-10:** Successfully tested and verified live dictation by user ("it works").
+- **2026-10-10:** Resolved long-speech truncation: implemented full audio tail flushing, removed premature 600ms worker join timeout (increased to 4.0s drain), protected single-model C memory with `needle_lock`, captured uncommitted pending tail on stream completion, and added 5th automated test in `tests/test_smoke.py`.
 - **2026-10-10:** Repository published and synced to `https://github.com/hermonbest/whistle-flow.git`.
 
 ## Status
-- Fully operational and running ambiently in background. Auto-starts with Windows.
+- Fully operational and running ambiently in background. Auto-starts with Windows. High fidelity on long dictations.

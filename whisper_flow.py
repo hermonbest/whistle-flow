@@ -293,6 +293,9 @@ class WisprPillApp:
         self.done_t = None  # perf_counter timestamp of last successful paste
 
         # Live streaming chunk generator state
+        self.needle_lock = threading.Lock()
+        self.buffer_acc = []
+        self.last_pending = ""
         self.stream_chunks_queue = queue.Queue()
         self.stream_thread = None
         self.accumulated_text = ""
@@ -377,7 +380,8 @@ class WisprPillApp:
     # ------------------------------------------------------------------ STT / audio
     def warmup(self):
         try:
-            needle.transcribe(np.zeros(SAMPLE_RATE, dtype=np.float32))
+            with self.needle_lock:
+                needle.transcribe(np.zeros(SAMPLE_RATE, dtype=np.float32))
         except Exception:
             pass
 
@@ -410,6 +414,8 @@ class WisprPillApp:
             self.stream_chunks_queue.get_nowait()
 
         self.accumulated_text = ""
+        self.buffer_acc.clear()
+        self.last_pending = ""
         self.stream_active = True
 
         # Start live streaming consumer in background
@@ -424,18 +430,32 @@ class WisprPillApp:
                     except queue.Empty:
                         continue
 
+            parts = []
             try:
-                for res in needle.stream(chunk_generator()):
-                    if res and "text" in res and res["text"]:
-                        self.accumulated_text += " " + res["text"].strip()
-            except Exception as e:
-                pass
+                with self.needle_lock:
+                    for res in needle.stream(chunk_generator()):
+                        if not res:
+                            continue
+                        txt = (res.get("text") or "").strip()
+                        if txt:
+                            parts.append(txt)
+                        pend = (res.get("pending") or "").strip()
+                        if pend:
+                            self.last_pending = pend
+                        else:
+                            self.last_pending = ""
+                    # If stream finishes and pending text wasn't committed yet:
+                    if self.last_pending and self.last_pending not in parts:
+                        parts.append(self.last_pending)
+            except Exception as err:
+                print(f"[!] Streaming consumer error: {err}")
+            finally:
+                self.accumulated_text = " ".join(p for p in parts if p).strip()
 
         self.stream_thread = threading.Thread(target=streaming_consumer, daemon=True)
         self.stream_thread.start()
 
         # Audio capture callback
-        buffer_acc = []
         chunk_samples = int(SAMPLE_RATE * 1.0)  # 1-second chunks for stream
 
         def audio_cb(indata, frames, time_info, status):
@@ -449,12 +469,12 @@ class WisprPillApp:
                 self.level_raw = clamp((db + 52.0) / 38.0)
 
                 # Feed 1-second chunk to streaming transcriber
-                buffer_acc.append(flat)
-                curr_len = sum(len(b) for b in buffer_acc)
+                self.buffer_acc.append(flat)
+                curr_len = sum(len(b) for b in self.buffer_acc)
                 if curr_len >= chunk_samples:
-                    chunk = np.concatenate(buffer_acc[:])
+                    chunk = np.concatenate(self.buffer_acc[:])
                     self.stream_chunks_queue.put(chunk)
-                    buffer_acc.clear()
+                    self.buffer_acc.clear()
 
         self.stream = sd.InputStream(samplerate=SAMPLE_RATE, channels=1, dtype="float32", callback=audio_cb)
         self.stream.start()
@@ -472,6 +492,7 @@ class WisprPillApp:
         if self.ptt.is_recording:
             self.ptt.cancel()
             self.stream_active = False
+            self.buffer_acc.clear()
             self.stream_chunks_queue.put(None)
             self.level_raw = 0.0
             self._close_stream()
@@ -480,17 +501,25 @@ class WisprPillApp:
     def stop_and_paste(self):
         self.is_transcribing = True
         self.stream_active = False
-        self.stream_chunks_queue.put(None)
         self.level_raw = 0.0
         self.play_sound(750, 70)
         self._close_stream()
+
+        # Flush any remaining audio in buffer_acc to stream queue so no tail speech is lost
+        if self.buffer_acc:
+            tail = np.concatenate(self.buffer_acc[:])
+            self.buffer_acc.clear()
+            if len(tail) > 0:
+                self.stream_chunks_queue.put(tail)
+        self.stream_chunks_queue.put(None)
+
         target = self.last_target_hwnd
 
         def _worker():
             pasted = False
-            # Wait for streaming worker to finalize
+            # Allow streaming worker to fully drain remaining chunks and finalize the tail
             if self.stream_thread and self.stream_thread.is_alive():
-                self.stream_thread.join(timeout=0.6)
+                self.stream_thread.join(timeout=4.0)
 
             text = self.accumulated_text.strip()
 
@@ -505,8 +534,9 @@ class WisprPillApp:
                     trimmed = trim_silence(audio)
                     if len(trimmed) >= int(SAMPLE_RATE * 0.3):
                         try:
-                            res = needle.transcribe(trimmed)
-                            text = (res.get("text") or "").strip()
+                            with self.needle_lock:
+                                res = needle.transcribe(trimmed)
+                                text = (res.get("text") or "").strip()
                         except Exception as err:
                             print(f"[!] STT fallback error: {err}")
 
