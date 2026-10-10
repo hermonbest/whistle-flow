@@ -89,7 +89,7 @@ pip install -r requirements.txt
 
 ### 3. Run
 
-To launch the interactive floating pill:
+To launch the interactive floating pill immediately:
 
 ```bash
 python whisper_flow.py
@@ -101,17 +101,21 @@ Or run silently in the background (no console window):
 wscript run_pill.vbs
 ```
 
-### 4. Automatic Startup with Windows (Ambient Mode)
+### 4. Make It Permanent (Start on Boot)
 
-Whistle Flow is designed to be an ambient desktop companion that is always ready without requiring you to manually open a terminal or run a script:
+To make Whistle Flow permanently run in the background every time Windows boots so <kbd>Ctrl</kbd> + <kbd>Space</kbd> always works:
 
-- Copy `run_pill.vbs` into your Windows Startup folder (`shell:startup`), or run this one-liner in PowerShell:
+Run the automated installer:
 
-```powershell
-Copy-Item "run_pill.vbs" "$([Environment]::GetFolderPath('Startup'))\Whistle_Flow.vbs"
+```bash
+python setup_autostart.py
 ```
 
-Once installed, Whistle Flow automatically starts up with Windows in the background. A built-in Windows named mutex (`WhistleFlowSingleInstanceMutex`) guarantees only one background instance runs at any time, preventing duplicate collisions.
+*(Or simply double-click `install_startup.bat` in the project folder.)*
+
+This automatically detects your Python environment, generates the headless background runner with absolute paths, and registers it in both the Windows Registry (`HKCU\...\Run`) and Windows Startup folder.
+
+A built-in Windows named mutex (`WhistleFlowSingleInstanceMutex`) guarantees only one background instance runs at any time, preventing duplicate collisions.
 
 ---
 
