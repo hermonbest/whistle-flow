@@ -345,6 +345,10 @@ class WisprPillApp:
                     if self.space_down:
                         self.space_down = False
                         self.ptt.on_release()
+            elif self.space_down and e.event_type == "up" and ("ctrl" in e.name or "control" in e.name):
+                # Also trigger release if Ctrl is released before Space during PTT
+                self.space_down = False
+                self.ptt.on_release()
 
         keyboard.hook(on_key_event)
 
@@ -677,4 +681,10 @@ class WisprPillApp:
 
 
 if __name__ == "__main__":
+    kernel32 = ctypes.windll.kernel32
+    mutex = kernel32.CreateMutexW(None, False, "WhistleFlowSingleInstanceMutex")
+    ERROR_ALREADY_EXISTS = 183
+    if kernel32.GetLastError() == ERROR_ALREADY_EXISTS:
+        # Another instance is already running
+        sys.exit(0)
     WisprPillApp().run()

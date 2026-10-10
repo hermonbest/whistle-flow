@@ -70,6 +70,18 @@ Or run silently in the background (no console window):
 wscript run_pill.vbs
 ```
 
+### 4. Automatic Startup with Windows (Ambient Mode)
+
+Whistle Flow is designed to be an ambient desktop companion that is always ready without requiring you to manually open a terminal or run a script:
+
+- Copy `run_pill.vbs` into your Windows Startup folder (`shell:startup`), or run this one-liner in PowerShell:
+
+```powershell
+Copy-Item "run_pill.vbs" "$([Environment]::GetFolderPath('Startup'))\Whistle_Flow.vbs"
+```
+
+Once installed, Whistle Flow automatically starts up with Windows in the background. A built-in Windows named mutex (`WhistleFlowSingleInstanceMutex`) guarantees only one background instance runs at any time, preventing duplicate collisions.
+
 ---
 
 ## ⌨️ Controls & Hotkeys

@@ -11,7 +11,10 @@ Implemented and verified:
 - **2026-10-10:** Implemented layered window Wispr Flow design with spring physics and 21-bar aurora visualizer.
 - **2026-10-10:** Upgraded interaction to Push-To-Talk via <kbd>Ctrl + Space</kbd> and real-time streaming STT.
 - **2026-10-10:** Added PTT and silence trimming tests to `tests/test_smoke.py` (all tests passing).
-- **2026-10-10:** Pre-configured git remote `origin` to `https://github.com/hermonbest/whistle-flow.git` on branch `main`.
+- **2026-10-10:** Integrated Windows named single-instance mutex (`WhistleFlowSingleInstanceMutex`) preventing duplicate colliding processes.
+- **2026-10-10:** Configured ambient auto-launch on boot via Windows Startup folder (`Whistle_Flow.vbs`).
+- **2026-10-10:** Successfully tested and verified live dictation by user ("it works").
+- **2026-10-10:** Repository published and synced to `https://github.com/hermonbest/whistle-flow.git`.
 
-## Immediate Next Steps
-- Push commits to GitHub repository upon creation by the user.
+## Status
+- Fully operational and running ambiently in background. Auto-starts with Windows.
