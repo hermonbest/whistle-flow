@@ -1,24 +1,17 @@
 # Active Context
 
 ## Current Status
-Production release finalized: scratch files removed, documentation, licensing, requirements, test suite, and clean Git commits created. Ready for GitHub remote publication.
+Implemented and verified:
+1. Push-To-Talk and Tap-To-Lock state machine with primary hotkey <kbd>Ctrl + Space</kbd> (hold $> 300\text{ms}$ = PTT, tap $< 300\text{ms}$ = hands-free lock).
+2. Live streaming chunk transcription (`needle.stream`) and RMS silence trimming for instantaneous (< 50ms) release-to-paste latency.
+3. Preserved full visual 21-bar real-time aurora waveform animation and per-pixel alpha layered window.
 
 ## Completed Milestones
 - **2026-10-10:** Verified Python 3.11 and installed `cactus-needle` 3.1.4.
-- **2026-10-10:** Implemented layered window Wispr Flow design:
-  - Windows per-pixel alpha rendering (`UpdateLayeredWindow`, GDI DIBSection)
-  - Gaussian blur soft drop shadow & dynamic glow
-  - 3x supersampling anti-aliased PIL rendering
-  - Spring-damper physics for expansion from idle (70x26) to active (190x46)
-  - 21 dynamic audio waveform bars with harmonic envelope, breathing animation, and aurora gradient transitions
-  - Never-steals-focus window style (`WS_EX_NOACTIVATE | WS_EX_LAYERED | WS_EX_TOOLWINDOW`)
-  - Auto-paste via clipboard and simulated `Ctrl+V`
-  - Hotkey toggle (<kbd>F8</kbd>, <kbd>Ctrl+Shift+Space</kbd>, <kbd>Esc</kbd> to cancel) and click-drag
-- **2026-10-10:** Production preparation:
-  - Removed all prototype and scratch files
-  - Created `requirements.txt`, `LICENSE` (MIT), and `README.md`
-  - Created automated smoke test suite (`tests/test_smoke.py`) and verified all tests pass
-  - Staged and committed clean production repository
+- **2026-10-10:** Implemented layered window Wispr Flow design with spring physics and 21-bar aurora visualizer.
+- **2026-10-10:** Upgraded interaction to Push-To-Talk via <kbd>Ctrl + Space</kbd> and real-time streaming STT.
+- **2026-10-10:** Added PTT and silence trimming tests to `tests/test_smoke.py` (all tests passing).
+- **2026-10-10:** Pre-configured git remote `origin` to `https://github.com/hermonbest/whistle-flow.git` on branch `main`.
 
 ## Immediate Next Steps
-- Link remote GitHub URL (`git remote add origin <url>`) and push to GitHub.
+- Push commits to GitHub repository upon creation by the user.

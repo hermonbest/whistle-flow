@@ -1,84 +1,112 @@
-# Spec: Whistle Flow (Production Release)
+# Spec: Whistle Flow - Push-To-Talk & Streaming Transcription Upgrade
 
 ## Objective
-Package, document, and publish **Whistle Flow** as an open-source, production-ready local AI voice dictation tool for Windows. It provides a pixel-perfect, ambient floating capsule UI (inspired by Wispr Flow) powered by ultra-fast local speech-to-text (~80ms via Whistle / `cactus-needle`), per-pixel alpha layered window rendering, real-time 21-bar audio waveform animation, and zero-focus-loss auto-pasting into any active text field.
+Upgrade Whistle Flow's core UX to match the responsive feel of **Wispr Flow**:
+1. **Fluid Push-To-Talk & Hands-Free Tap-To-Lock:**
+   - Replace the legacy two-click/two-press interaction with natural push-to-talk.
+   - Hold <kbd>Right Ctrl</kbd> (or configurable key) for $> 300\text{ms}$ $\rightarrow$ speak $\rightarrow$ release to paste immediately.
+   - Short tap ($< 300\text{ms}$) $\rightarrow$ locks into hands-free dictation mode (tap again to finish).
+   - <kbd>Esc</kbd> cancels dictation at any time with a cancel sound cue.
+2. **Low-Latency Streaming Chunk Transcription & Silence Trimming:**
+   - Stream audio buffers in ~1.0s increments into `needle.stream()` in real time as the user speaks.
+   - Leading and trailing silence trimmed via dynamic energy/RMS threshold to eliminate Whisper hallucinations and reduce wasted inference.
+   - On key release, only the small final buffer ($< 0.3\text{s}$) is processed, dropping perceived release-to-paste latency to under $50\text{ms}$.
+
+---
+
+## Assumptions
+1. Key selection: Default to <kbd>Right Ctrl</kbd> (`right ctrl`) since Windows cannot intercept the proprietary hardware `Fn` key, and `Right Ctrl` does not interfere with standard typing or shortcuts.
+2. Secondary hotkeys: Retain <kbd>F8</kbd> and <kbd>Ctrl+Shift+Space</kbd> as fallback toggle shortcuts.
+3. Streaming STT: Use Whistle's built-in `needle.stream(chunks)` generator rather than introducing new heavyweight external streaming servers.
+4. Silence trimming: Implement zero-dependency NumPy RMS/energy gating to keep execution ultra-fast and self-contained.
 
 ---
 
 ## Tech Stack
 - **Language & Runtime:** Python 3.10+ (Windows 10/11)
-- **STT Engine:** `cactus-needle` (Whistle local 16.9 MB engine)
-- **Audio Capture:** `sounddevice`, `numpy` (16 kHz mono float32)
-- **Window & Graphics:** `tkinter`, `PIL` (Pillow), Win32 API (`UpdateLayeredWindow`, GDI `CreateDIBSection`, per-pixel alpha)
-- **Hotkeys & Input:** `keyboard`, Win32 `keybd_event` (for simulated clipboard paste)
-- **Process Launcher:** VBScript / Windows Script Host (`wscript.exe`) for detached background execution
+- **STT Engine:** `cactus-needle` (`needle.stream` live streaming chunk generator)
+- **Audio Capture & VAD:** `sounddevice`, `numpy` (16 kHz mono float32 with RMS threshold gating)
+- **Window & Graphics:** `tkinter`, `PIL` (Pillow), Win32 API (`UpdateLayeredWindow`, GDI DIBSection)
+- **Input & Hotkeys:** `keyboard` (`on_press_key`, `on_release_key`), Win32 `keybd_event`
 
 ---
 
 ## Commands
-- **Install dependencies:** `pip install -r requirements.txt`
-- **Run application:** `python whisper_flow.py`
-- **Silent launcher:** `wscript run_pill.vbs`
-- **Run test verification:** `python -m unittest discover tests`
-- **Lint/Check:** `python -m py_compile whisper_flow.py`
+- **Run Application:** `python whisper_flow.py`
+- **Run Silent Launcher:** `wscript run_pill.vbs`
+- **Run Verification Suite:** `python -m unittest discover tests`
 
 ---
 
 ## Project Structure
-A minimal, clean repository without dead scratch prototypes:
 ```text
-├── .gitignore               → Git ignore patterns (__pycache__, logs, models, venv)
-├── LICENSE                  → Open source license (MIT)
-├── README.md                → Full production documentation, architecture, install & usage guide
+├── .gitignore               → Git ignore patterns
+├── LICENSE                  → MIT License
+├── README.md                → Documentation with PTT & streaming usage
 ├── SPEC.md                  → This specification
-├── requirements.txt         → Minimal pinned dependencies
-├── run_pill.vbs             → Zero-console background launcher for Windows
-├── whisper_flow.py          → Core application (Layered UI, STT, hotkeys, auto-paste)
+├── requirements.txt         → Production dependencies
+├── run_pill.vbs             → Zero-console background launcher
+├── whisper_flow.py          → Application with PTT listener, streaming STT, and layered UI
 ├── docs/
-│   └── active_context.md    → Project context, decisions, and history
+│   └── active_context.md    → Project context & milestones
 └── tests/
-    └── test_smoke.py        → Unit and smoke tests for STT and audio pipeline
+    └── test_smoke.py        → Unit tests for streaming chunk generator and VAD
 ```
-*(Legacy prototype scratch scripts `whistle_flow_widget.py`, `simple_whistle.py`, `record_and_transcribe.py`, `whisperflow.py`, `launch_widget.bat` will be cleaned up/removed to ensure a clean public repo).*
 
 ---
 
-## Code Style & Conventions
-- Single responsibility modules with minimal boilerplate.
-- Suppress external noisy telemetry/warnings at startup before imports:
+## Code Style & Implementation Details
+- **PTT State Machine:**
   ```python
-  os.environ["NEEDLE_TELEMETRY"] = "0"
-  os.environ["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1"
+  # Push-to-Talk vs Tap-to-Lock state logic
+  HOLD_THRESHOLD = 0.30  # 300 ms
+
+  def on_key_down(e):
+      self.press_time = time.perf_counter()
+      if not self.is_recording:
+          self.start_recording()
+
+  def on_key_up(e):
+      duration = time.perf_counter() - self.press_time
+      if duration >= HOLD_THRESHOLD:
+          # Held down: Push-To-Talk -> finish and paste
+          self.stop_and_paste()
+      else:
+          # Short tap: Lock in hands-free mode (toggle)
+          if self.is_locked:
+              self.stop_and_paste()
+              self.is_locked = False
+          else:
+              self.is_locked = True
   ```
-- Windows API calls typed via `ctypes.wintypes`.
-- Explicit resource management for audio streams and GDI handles.
+- **Streaming Pipeline:**
+  A dedicated background worker feeds incoming 16 kHz buffers to `needle.stream(chunk_generator)` as they arrive, accumulating confirmed text tokens in real time.
 
 ---
 
 ## Testing Strategy
-- **Smoke test:** Headless verification that `needle` model loads and transcribes silent numpy arrays in `< 150ms`.
-- **Audio test:** Verify `sounddevice` input stream initializes at 16 kHz without hardware crash.
-- **Surface test:** Verify `LayeredSurface` GDI allocation and composite generation without memory leaks.
+- Unit test streaming chunk generation (`tests/test_smoke.py`): verify feeding three 1.0s numpy arrays to `needle.stream` yields tokens and closes cleanly without deadlock.
+- Unit test RMS silence trim logic: verify silence buffers are properly clipped without corrupting audio amplitude.
 
 ---
 
 ## Boundaries
-- **Always:** Keep local offline privacy intact (zero external network requests for audio).
-- **Always:** Maintain non-intrusive focus (`WS_EX_NOACTIVATE`) so user typing is never interrupted.
-- **Never:** Commit credentials, tokens, temporary wave recordings, or virtual environment files.
-- **Ask first:** Before pushing to GitHub, confirm repository name and remote URL.
+- **Always:** Keep processing 100% on-device and local.
+- **Always:** Preserve the smooth per-pixel alpha capsule UI and dynamic 21-bar waveform.
+- **Never:** Block the main GUI/animation loop on audio inference threads.
+- **Ask first:** Before changing the default trigger key from <kbd>Right Ctrl</kbd>.
 
 ---
 
 ## Success Criteria
-1. Clean repository with obsolete scratch scripts removed and tracked files organized.
-2. `requirements.txt`, `README.md`, `LICENSE`, and `tests/` present.
-3. Tests pass cleanly via `python -m unittest`.
-4. Git commit created with all clean documentation.
-5. GitHub remote configured and repository published.
+1. Holding <kbd>Right Ctrl</kbd> records; releasing immediately stops and pastes.
+2. Tapping <kbd>Right Ctrl</kbd> (< 300ms) locks hands-free recording; tapping again finishes and pastes.
+3. Transcription is streamed in real time during speech so release-to-paste latency is $< 50\text{ms}$.
+4. Tests pass cleanly via `python -m unittest discover tests`.
+5. Code committed and ready for push.
 
 ---
 
-## Open Questions & Assumptions
-1. **GitHub Repository Name & URL:** What repository name should we use on your GitHub (e.g. `https://github.com/hermon/whistle-flow.git`)? Have you already created the empty repo on GitHub, or do you have a personal access token / SSH key set up?
-2. **Scratch file cleanup:** Confirm removing early prototype scripts (`record_and_transcribe.py`, `simple_whistle.py`, `whisperflow.py`, `whistle_flow_widget.py`) so your public repository contains only the clean production files.
+## Open Questions
+1. Is **<kbd>Right Ctrl</kbd>** the preferred default key for push-to-talk, or would you prefer **<kbd>Caps Lock</kbd>** or **<kbd>Right Alt</kbd>**?
+2. Do you want the live transcribed partial words displayed above the waveform in real time while speaking, or keep the pill clean with only the animated aurora wave?

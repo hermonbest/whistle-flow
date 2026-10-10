@@ -75,11 +75,13 @@ wscript run_pill.vbs
 
 | Action | Control | Description |
 | :--- | :--- | :--- |
-| **Start / Stop Dictation** | <kbd>F8</kbd> or <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>Space</kbd> | Toggle speech recording on or off |
-| **Click to Dictate** | Left-click on pill | Alternate mouse toggle |
-| **Move Pill** | Click and drag | Reposition the pill anywhere on your screen |
-| **Cancel** | <kbd>Esc</kbd> | Discard current audio clip without pasting |
-| **Close App** | Right-click on pill | Clean exit |
+| **Push-To-Talk** | Hold <kbd>Ctrl</kbd> + <kbd>Space</kbd> ($> 300\text{ms}$) | Speak while holding; release to immediately stop and paste |
+| **Hands-Free Lock** | Tap <kbd>Ctrl</kbd> + <kbd>Space</kbd> ($< 300\text{ms}$) | Quick tap locks recording on; tap again when finished |
+| **Fallback Toggle** | <kbd>F8</kbd> | Classic toggle shortcut |
+| **Click / Drag** | Mouse Left-Click & Drag | Click to toggle; drag anywhere to reposition |
+| **Cancel** | <kbd>Esc</kbd> | Immediately discard audio clip without pasting |
+| **Close** | Right-click on pill | Clean exit |
+
 
 ---
 
