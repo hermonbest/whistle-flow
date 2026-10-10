@@ -37,6 +37,7 @@ import sounddevice as sd
 import tkinter as tk
 import keyboard
 from PIL import Image, ImageDraw, ImageFilter
+from faster_whisper import WhisperModel
 import needle
 
 # ---------------------------------------------------------------------------
@@ -309,7 +310,7 @@ class WisprPillApp:
         self.last_target_hwnd = 0
         self.level_raw = 0.0
         self.done_t = None  # perf_counter timestamp of last successful paste
-
+        self.model = None
 
         # PTT Controller (<kbd>Ctrl + Space</kbd>)
         self.ptt = PttController(on_start=self.start_recording, on_stop=self.stop_and_paste)
@@ -390,9 +391,20 @@ class WisprPillApp:
     # ------------------------------------------------------------------ STT / audio
     def warmup(self):
         try:
-            needle.transcribe(np.zeros(SAMPLE_RATE, dtype=np.float32))
-        except Exception:
-            pass
+            t0 = time.perf_counter()
+            self.model = WhisperModel("tiny.en", device="cpu", compute_type="int8", local_files_only=True)
+            segments, _ = self.model.transcribe(np.zeros(SAMPLE_RATE, dtype=np.float32), language="en", beam_size=1)
+            list(segments)
+            logger.info(f"Faster-Whisper INT8 model loaded and warmed up in {(time.perf_counter() - t0)*1000:.1f}ms.")
+        except Exception as e:
+            logger.warning(f"Faster-Whisper local load notice: {e}. Trying default loader...")
+            try:
+                self.model = WhisperModel("tiny.en", device="cpu", compute_type="int8")
+                segments, _ = self.model.transcribe(np.zeros(SAMPLE_RATE, dtype=np.float32), language="en", beam_size=1)
+                list(segments)
+                logger.info("Faster-Whisper INT8 model loaded successfully.")
+            except Exception as e2:
+                logger.error(f"Faster-Whisper fallback to needle: {e2}")
 
     def track_focus(self):
         fg = user32.GetForegroundWindow()
@@ -480,8 +492,12 @@ class WisprPillApp:
                 if len(trimmed) >= int(SAMPLE_RATE * 0.25):
                     t_decode_start = time.perf_counter()
                     try:
-                        res = needle.transcribe(trimmed)
-                        text = (res.get("text") or "").strip()
+                        if self.model is not None:
+                            segments, _ = self.model.transcribe(trimmed, language="en", beam_size=1)
+                            text = " ".join(s.text.strip() for s in segments if s.text).strip()
+                        else:
+                            res = needle.transcribe(trimmed, language="en")
+                            text = (res.get("text") or "").strip()
                         decode_ms = (time.perf_counter() - t_decode_start) * 1000
                         logger.info(f"Decoded in {decode_ms:.1f}ms: '{text}'")
                     except Exception as err:

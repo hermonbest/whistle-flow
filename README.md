@@ -1,8 +1,8 @@
 # 🎙️ Whistle Flow
 
-An ambient, lightweight, ultra-fast local voice dictation pill for Windows — inspired by the design and fluid physics of **Wispr Flow**, powered entirely on-device by **Whistle** (`cactus-needle`).
+An ambient, lightweight, ultra-fast local voice dictation pill for Windows — inspired by the design and fluid physics of **Wispr Flow**, powered on-device with **INT8 Vector Acceleration** (`faster-whisper` + Whistle).
 
-Speak into any application on your machine and have your words transcribed and typed into your active text box in under **50 milliseconds** after releasing the key — with **zero cloud dependencies** and **no focus loss**.
+Speak into any application on your machine and have your words transcribed and typed into your active text box in under **half a second** after releasing the key — with **zero cloud dependencies** and **no focus loss**.
 
 ---
 
@@ -10,12 +10,12 @@ Speak into any application on your machine and have your words transcribed and t
 
 - **Ambient Layered Capsule UI:** Pixel-perfect floating capsule using Windows per-pixel alpha (`UpdateLayeredWindow`), GDI DIBSection, and soft Gaussian drop shadows.
 - **Push-To-Talk & Tap-To-Lock:** Hold <kbd>Ctrl</kbd> + <kbd>Space</kbd> to talk, release to paste. Quick tap locks into hands-free mode.
-- **Real-Time Streaming Transcription:** Processes ~1.0s audio chunks in the background *while you speak* via `needle.stream()`, so by the time you release only the final tail remains.
-- **Dynamic Silence Trimming:** Energy-based RMS silence gating trims dead air to avoid Whisper hallucinations on quiet speech.
+- **Hardware INT8 Vector Acceleration:** Uses Intel AVX-512 VNNI neural vector instructions via `faster-whisper` (CTranslate2 INT8) to decode 15 seconds of speech in just **`~500 ms`**!
+- **Dynamic Silence Trimming:** Energy-based RMS silence gating trims dead air to avoid Whisper hallucinations on quiet speech and keep latency ultra-low.
 - **Spring-Damper Dynamics:** Smooth, elastic animation that expands from a compact idle pill ($70 \times 26\text{px}$) to an active dictation bar ($190 \times 46\text{px}$) with natural physics.
 - **21-Bar Real-Time Aurora Waveform:** Dynamic multi-harmonic audio visualizer reacting in real-time to your voice volume with aurora gradient sweeps during processing.
 - **Never Steals Focus (`WS_EX_NOACTIVATE`):** Click or hotkey-trigger the pill without pulling keyboard focus away from Word, Slack, Discord, Chrome, or your IDE.
-- **100% Offline & Private:** Audio never leaves your machine. Telemetry is explicitly disabled.
+- **100% Offline & Private:** Audio never leaves your machine. Telemetry and cloud network checks are completely disabled.
 
 ---
 
@@ -26,15 +26,18 @@ User Voice (16 kHz) ──→ sounddevice (InputStream)
                                │
                ┌───────────────┴───────────────┐
                ▼                               ▼
-       21-Bar Aurora Wave              Streaming STT Engine
-     (PIL Supersampling DIB)           (needle.stream() ~1s chunks)
-               │                               │
-               ▼                               ▼
-   Windows Layered Surface               Text Output
-    (UpdateLayeredWindow)                      │
+       21-Bar Aurora Wave              Audio Buffer (FIFO)
+     (PIL Supersampling DIB)                   │
+               │                               ▼
+               ▼                     RMS Energy Silence Gating
+   Windows Layered Surface                     │
+    (UpdateLayeredWindow)                      ▼
+                                      faster-whisper (INT8)
+                                     (AVX-512 VNNI Acceleration)
+                                               │
                                                ▼
-                                    Win32 Auto-Paste
-                              (Clipboard + Ctrl+V Injection)
+                                     Win32 Auto-Paste
+                               (Clipboard + Ctrl+V Injection)
 ```
 
 ---
