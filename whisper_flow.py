@@ -16,10 +16,13 @@ from websockets.sync.client import connect as ws_sync_connect
 
 LOG_FILE = Path(__file__).resolve().parent / "whisper_flow.log"
 logging.basicConfig(
-    filename=str(LOG_FILE),
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S"
+    datefmt="%Y-%m-%d %H:%M:%S",
+    handlers=[
+        logging.FileHandler(str(LOG_FILE), encoding="utf-8"),
+        logging.StreamHandler(sys.stdout)
+    ]
 )
 logger = logging.getLogger("whistle_flow")
 logger.info("Whistle Flow engine initialized.")
@@ -586,9 +589,9 @@ class WisprPillApp:
         self.phonon_client = PhononStreamClient(port=self.phonon_port)
 
         self.live_text = ""
-        self.toast_msg = ""
-        self.toast_col = WHITE
-        self.toast_t = 0.0
+        self.toast_msg = "PHONON 2 READY" if self.engine == "phonon" else "WHISPER READY"
+        self.toast_col = VIOLET if self.engine == "phonon" else CYAN
+        self.toast_t = time.perf_counter()
 
         sw = self.root.winfo_screenwidth()
         sh = self.root.winfo_screenheight()
@@ -648,6 +651,16 @@ class WisprPillApp:
 
         self.track_focus()
         self.tick()
+
+        banner_engine = f"{self.engine.upper()} ({'Live Streaming' if self.engine == 'phonon' else 'Batch INT8'})"
+        print("\n" + "=" * 62)
+        print("  [WHISTLE FLOW DICTATION PILL IS RUNNING]")
+        print(f"  * Active Engine : {banner_engine}")
+        print("  * Dictate       : Hold [Ctrl + Space] to talk, release to paste")
+        print("  * Switch Engine : [Ctrl + Shift + Space] or double-click the pill")
+        print("  * Screen Pill   : Floating pill is active at the bottom of your screen")
+        print("=" * 62 + "\n", flush=True)
+        play_click("start")
 
     # ------------------------------------------------------------------ input
     def setup_controls(self):
@@ -1110,7 +1123,8 @@ if __name__ == "__main__":
     mutex = kernel32.CreateMutexW(None, False, "WhistleFlowSingleInstanceMutex")
     ERROR_ALREADY_EXISTS = 183
     if kernel32.GetLastError() == ERROR_ALREADY_EXISTS:
-        # Another instance is already running
+        print("\n[Whistle Flow] Another instance of Whistle Flow is already running in the background.")
+        print("[Whistle Flow] Check your screen/tray, or terminate the existing process before launching a new one.\n")
         sys.exit(0)
 
     parser = argparse.ArgumentParser(description="Whistle Flow Dictation Pill")
