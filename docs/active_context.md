@@ -23,6 +23,10 @@ Implemented and verified:
 - **2026-10-10:** Completed `/ponytail-audit` pruning: eliminated legacy fallback code, dropped `cactus-needle` dependency, removed stale assets, simplified startup forwarder.
 - **2026-10-10:** Updated `README.md` to accurately document the streamlined, single-engine architecture and 1-click installer.
 - **2026-10-10:** Repository published and synced to `https://github.com/hermonbest/whistle-flow.git`.
+- **2026-10-16:** Integrated Fermion Research **Phonon-2** as a secondary speech engine alongside `faster-whisper`.
+- **2026-10-16:** Implemented Option 1 (WebSocket live streaming preview): streams audio over `/v1/audio/stream`, displaying live words in real time on the smoothly expanding capsule with animated cursor dot and near-zero release-to-paste latency.
+- **2026-10-16:** Added on-the-fly engine toggle (<kbd>F9</kbd> hotkey and `--engine` CLI argument) with visual toast notifications and persistent `config.json`.
+- **2026-10-16:** Expanded smoke test suite in `tests/test_smoke.py` to 9 tests covering config, streaming framing, and live text rendering.
 
 ## Status
-- Fully operational, lean, and running ambiently in background. Sub-second (~500ms) paste latency on paragraph speech with 100% local, self-contained dependencies.
+- Fully operational with dual-engine comparison: toggle between Faster-Whisper (INT8 multilingual atomic) and Phonon-2 (TDT live streaming preview) with <kbd>F9</kbd>.

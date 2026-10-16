@@ -10,9 +10,12 @@ Speak into any application on your machine and have your words transcribed and t
 
 - **Ambient Layered Capsule UI:** Pixel-perfect floating capsule using Windows per-pixel alpha (`UpdateLayeredWindow`), GDI DIBSection, and soft Gaussian drop shadows.
 - **Push-To-Talk & Tap-To-Lock:** Hold <kbd>Ctrl</kbd> + <kbd>Space</kbd> to talk, release to paste. Quick tap locks into hands-free mode.
+- **Dual Speech Engine (Whisper + Phonon-2):** Choose between battle-tested `faster-whisper` (multilingual, sub-second single pass) and `Phonon-2` (Fermion Research Parakeet-TDT 164 MB with live streaming WebSocket preview).
+- **Real-Time Live Streaming Preview:** In Phonon mode, your spoken words are transcribed live directly on the expanded capsule in real time as you speak, with near-zero latency release-to-paste.
+- **1-Click Engine Switching (<kbd>F9</kbd>):** Switch between Whisper and Phonon instantly on the fly with <kbd>F9</kbd> or CLI flag (`--engine phonon|whisper`), persisted in `config.json`.
 - **Background Audio Muting (`pycaw`):** Automatically mutes other background audio sessions (Spotify, YouTube, Discord, Edge, Telegram) while recording is active, restoring their volume instantly upon completion or cancellation.
 - **Soft Tactile Audio Clicks:** Replaced harsh motherboard `winsound.Beep` tones with subtle, low-volume exponential-decay tactile clicks synthesized via `sounddevice`.
-- **Hardware INT8 Vector Acceleration:** Uses Intel AVX-512 VNNI neural vector instructions via `faster-whisper` (CTranslate2 INT8) to decode 15 seconds of speech in just **`~500 ms`**!
+- **Hardware INT8 Vector Acceleration:** Uses Intel AVX-512 VNNI neural vector instructions via `faster-whisper` (CTranslate2 INT8) and native Phonon AVX-512 VNNI kernels to decode speech with near-zero latency.
 - **Dynamic Silence Trimming:** Energy-based RMS silence gating trims dead air to avoid Whisper hallucinations on quiet speech and keep latency ultra-low.
 - **Spring-Damper Dynamics:** Smooth, elastic animation that expands from a compact idle pill ($70 \times 26\text{px}$) to an active dictation bar ($190 \times 46\text{px}$) with natural physics.
 - **21-Bar Real-Time Aurora Waveform:** Dynamic multi-harmonic audio visualizer reacting in real-time to your voice volume with aurora gradient sweeps during processing.
@@ -125,10 +128,11 @@ A built-in Windows named mutex (`WhistleFlowSingleInstanceMutex`) guarantees onl
 | :--- | :--- | :--- |
 | **Push-To-Talk** | Hold <kbd>Ctrl</kbd> + <kbd>Space</kbd> ($> 300\text{ms}$) | Speak while holding; release to immediately stop and paste |
 | **Hands-Free Lock** | Tap <kbd>Ctrl</kbd> + <kbd>Space</kbd> ($< 300\text{ms}$) | Quick tap locks recording on; tap again when finished |
+| **Switch Engine** | <kbd>F9</kbd> | Toggle on the fly between Faster-Whisper and Phonon-2 (Live Streaming) |
 | **Fallback Toggle** | <kbd>F8</kbd> | Classic toggle shortcut |
 | **Click / Drag** | Mouse Left-Click & Drag | Click to toggle; drag anywhere to reposition |
 | **Cancel** | <kbd>Esc</kbd> | Immediately discard audio clip without pasting |
-| **Close** | Right-click on pill | Clean exit |
+| **Close** | Right-click on pill | Clean exit (gracefully stops background daemon) |
 
 ---
 
@@ -182,6 +186,7 @@ Tests cover:
 ├── LICENSE             # MIT License
 ├── README.md           # Documentation
 ├── SPEC.md             # Technical design specification
+├── config.json         # Engine & server configuration
 ├── install_startup.bat # 1-click startup installer forwarder
 ├── requirements.txt    # Pinned production dependencies
 ├── run_pill.vbs        # Background Windows script host launcher

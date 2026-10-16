@@ -112,6 +112,48 @@ class TestWhistleFlowSmoke(unittest.TestCase):
         self.assertLessEqual(np.max(np.abs(wave)), 0.10)
         self.assertEqual(wave.dtype, np.float32)
 
+    def test_config_management(self):
+        """Verify config load and save correctly handles engine selection."""
+        from whisper_flow import load_config, save_config
+        cfg = load_config()
+        self.assertIn("engine", cfg)
+        orig_engine = cfg["engine"]
+        try:
+            cfg["engine"] = "phonon"
+            save_config(cfg)
+            loaded = load_config()
+            self.assertEqual(loaded["engine"], "phonon")
+        finally:
+            cfg["engine"] = orig_engine
+            save_config(cfg)
+
+    def test_phonon_client_framing(self):
+        """Verify PhononStreamClient queues float32 audio chunks in raw bytes format."""
+        from whisper_flow import PhononStreamClient
+        client = PhononStreamClient(port=8999)
+        client.is_active = True
+        audio = np.ones(160, dtype=np.float32) * 0.5
+        client.send_audio_chunk(audio)
+        self.assertEqual(client._send_queue.qsize(), 1)
+        raw_bytes = client._send_queue.get_nowait()
+        self.assertEqual(len(raw_bytes), 160 * 4)
+        client.abort()
+        self.assertFalse(client.is_active)
+
+    def test_live_text_rendering(self):
+        """Verify PIL renders live text preview and font metrics without error."""
+        from PIL import Image, ImageDraw, ImageFont
+        W, H, S = 400, 106, 3
+        img = Image.new("RGBA", (W * S, H * S), (0, 0, 0, 0))
+        d = ImageDraw.Draw(img)
+        font = ImageFont.truetype("segoeui.ttf", 13 * S)
+        text = "Testing live stream transcription preview."
+        w = d.textlength(text, font=font)
+        self.assertGreater(w, 0)
+        d.text((100, 50), text, font=font, fill=(255, 255, 255, 240))
+        resized = img.resize((W, H), Image.LANCZOS)
+        self.assertEqual(resized.size, (W, H))
+
 if __name__ == "__main__":
     unittest.main()
 

@@ -1,0 +1,5 @@
+{
+  "engine": "whisper",
+  "phonon_port": 8000,
+  "phonon_model": "phonon-2"
+}

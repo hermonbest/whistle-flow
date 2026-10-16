@@ -3,12 +3,16 @@ import sys
 import math
 import time
 import queue
+import json
+import argparse
 import logging
 import threading
 import subprocess
 import ctypes
+import urllib.request
 from ctypes import wintypes
 from pathlib import Path
+from websockets.sync.client import connect as ws_sync_connect
 
 LOG_FILE = Path(__file__).resolve().parent / "whisper_flow.log"
 logging.basicConfig(
@@ -24,7 +28,7 @@ import numpy as np
 import sounddevice as sd
 import tkinter as tk
 import keyboard
-from PIL import Image, ImageDraw, ImageFilter
+from PIL import Image, ImageDraw, ImageFilter, ImageFont
 from faster_whisper import WhisperModel
 
 # ---------------------------------------------------------------------------
@@ -287,6 +291,224 @@ class PttController:
 
 
 # ---------------------------------------------------------------------------
+# Configuration & Phonon Engine Plumbing
+# ---------------------------------------------------------------------------
+CONFIG_FILE = Path(__file__).resolve().parent / "config.json"
+
+
+def load_config() -> dict:
+    cfg = {
+        "engine": "whisper",
+        "phonon_port": 8000,
+        "phonon_model": "phonon-2",
+    }
+    if CONFIG_FILE.exists():
+        try:
+            with open(CONFIG_FILE, "r", encoding="utf-8") as f:
+                cfg.update(json.load(f))
+        except Exception as e:
+            logger.warning(f"Error reading config: {e}")
+    return cfg
+
+
+def save_config(cfg: dict):
+    try:
+        with open(CONFIG_FILE, "w", encoding="utf-8") as f:
+            json.dump(cfg, f, indent=2)
+    except Exception as e:
+        logger.warning(f"Error saving config: {e}")
+
+
+class PhononServerManager:
+    """Manages the background 'fermion serve phonon-2' daemon on localhost."""
+
+    def __init__(self, port: int = 8000, model: str = "phonon-2"):
+        self.port = port
+        self.model = model
+        self.process = None
+        self._lock = threading.Lock()
+
+    def is_running(self) -> bool:
+        try:
+            req = urllib.request.Request(f"http://127.0.0.1:{self.port}/health")
+            with urllib.request.urlopen(req, timeout=1.0) as res:
+                if res.status == 200:
+                    data = json.loads(res.read().decode())
+                    return data.get("status") == "ok"
+        except Exception:
+            return False
+        return False
+
+    def ensure_server(self, timeout: float = 12.0) -> bool:
+        with self._lock:
+            if self.is_running():
+                return True
+            logger.info(f"Phonon server not detected on port {self.port}. Starting background daemon...")
+            try:
+                CREATE_NO_WINDOW = 0x08000000
+                cmd = [
+                    sys.executable,
+                    "-c",
+                    "import sys, fermion.cli; sys.exit(fermion.cli.main())",
+                    "serve",
+                    self.model,
+                    "--port",
+                    str(self.port),
+                ]
+                self.process = subprocess.Popen(
+                    cmd,
+                    creationflags=CREATE_NO_WINDOW,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                )
+                t0 = time.perf_counter()
+                while time.perf_counter() - t0 < timeout:
+                    time.sleep(0.3)
+                    if self.is_running():
+                        logger.info(f"Phonon daemon online in {(time.perf_counter() - t0):.1f}s.")
+                        return True
+                    if self.process.poll() is not None:
+                        logger.error(f"Phonon daemon exited early: {self.process.returncode}")
+                        return False
+            except Exception as e:
+                logger.error(f"Failed to start Phonon daemon: {e}")
+                return False
+            return False
+
+    def stop(self):
+        with self._lock:
+            if self.process and self.process.poll() is None:
+                try:
+                    self.process.terminate()
+                    self.process.wait(timeout=2.0)
+                    logger.info("Phonon server process stopped.")
+                except Exception:
+                    pass
+                self.process = None
+
+
+class PhononStreamClient:
+    """Streams live 16kHz float32 audio over WebSocket to Phonon-2 (/v1/audio/stream)."""
+
+    def __init__(self, port: int = 8000):
+        self.port = port
+        self.ws = None
+        self.is_active = False
+        self.done_event = threading.Event()
+        self.final_text = ""
+        self.on_partial_cb = None
+        self.on_done_cb = None
+        self._thread = None
+        self._send_queue = queue.Queue()
+
+    def start_stream(self, on_partial=None, on_done=None):
+        self.abort()
+        self.is_active = True
+        self.done_event.clear()
+        self.final_text = ""
+        self.on_partial_cb = on_partial
+        self.on_done_cb = on_done
+        while not self._send_queue.empty():
+            try:
+                self._send_queue.get_nowait()
+            except Exception:
+                break
+
+        ready_event = threading.Event()
+
+        def _worker():
+            uri = f"ws://127.0.0.1:{self.port}/v1/audio/stream"
+            try:
+                with ws_sync_connect(uri, ping_interval=20, ping_timeout=20) as ws:
+                    self.ws = ws
+                    # Send stream configuration handshake
+                    ws.send(json.dumps({"sample_rate": 16000, "format": "pcm_f32le"}))
+                    ready_event.set()
+
+                    # Start dedicated receiver thread
+                    def _receiver():
+                        try:
+                            for msg in ws:
+                                data = json.loads(msg)
+                                mtype = data.get("type")
+                                if mtype == "partial":
+                                    txt = data.get("text", "")
+                                    if self.on_partial_cb:
+                                        self.on_partial_cb(txt)
+                                elif mtype == "done":
+                                    self.final_text = data.get("text", "").strip()
+                                    if self.on_done_cb:
+                                        self.on_done_cb(self.final_text)
+                                    self.done_event.set()
+                                    break
+                                elif mtype == "error":
+                                    logger.warning(f"Phonon server error: {data.get('message')}")
+                                    self.done_event.set()
+                                    break
+                        except Exception:
+                            pass
+                        finally:
+                            self.done_event.set()
+
+                    rec_thread = threading.Thread(target=_receiver, daemon=True)
+                    rec_thread.start()
+
+                    # Main sender loop
+                    while self.is_active:
+                        try:
+                            item = self._send_queue.get(timeout=0.2)
+                        except queue.Empty:
+                            continue
+                        if item is None:  # Stop signal
+                            try:
+                                ws.send(json.dumps({"type": "end"}))
+                            except Exception:
+                                pass
+                            break
+                        try:
+                            ws.send(item)
+                        except Exception as e:
+                            logger.warning(f"Error sending audio frame: {e}")
+                            break
+
+                    self.done_event.wait(timeout=2.0)
+            except Exception as e:
+                logger.warning(f"Phonon WebSocket connect notice: {e}")
+            finally:
+                self.is_active = False
+                self.done_event.set()
+                ready_event.set()
+                self.ws = None
+
+        self._thread = threading.Thread(target=_worker, daemon=True)
+        self._thread.start()
+        ready_event.wait(timeout=1.5)
+
+    def send_audio_chunk(self, chunk: np.ndarray):
+        if not self.is_active:
+            return
+        audio_bytes = chunk.astype(np.float32).tobytes()
+        self._send_queue.put(audio_bytes)
+
+    def stop_and_wait(self, timeout: float = 2.0) -> str:
+        if self.is_active:
+            self._send_queue.put(None)
+            self.done_event.wait(timeout=timeout)
+        self.abort()
+        return self.final_text
+
+    def abort(self):
+        self.is_active = False
+        self.done_event.set()
+        if self.ws:
+            try:
+                self.ws.close()
+            except Exception:
+                pass
+            self.ws = None
+
+
+# ---------------------------------------------------------------------------
 # Look & feel
 # ---------------------------------------------------------------------------
 SS = 3                       # supersampling factor for anti-aliasing
@@ -294,7 +516,8 @@ SS = 3                       # supersampling factor for anti-aliasing
 PAD = 30                     # room around the pill for shadow / glow / spring overshoot
 IDLE_W, IDLE_H = 70, 26
 ACT_W, ACT_H = 190, 46
-WIN_W, WIN_H = ACT_W + PAD * 2, ACT_H + PAD * 2
+MAX_ACT_W = 340              # expanded width for live text streaming
+WIN_W, WIN_H = MAX_ACT_W + PAD * 2, ACT_H + PAD * 2
 
 NUM_BARS = 21
 BAR_SPACING = 7.5
@@ -311,6 +534,17 @@ GREEN = (74, 222, 128)
 AURORA = [CYAN, VIOLET, PINK]
 
 SPRING_K, SPRING_C = 260.0, 21.0   # slightly under-damped = a little bounce
+
+try:
+    FONT_LIVE = ImageFont.truetype("segoeui.ttf", 13 * SS)
+    FONT_TOAST = ImageFont.truetype("segoeuib.ttf", 11 * SS)
+except Exception:
+    try:
+        FONT_LIVE = ImageFont.truetype("arial.ttf", 13 * SS)
+        FONT_TOAST = ImageFont.truetype("arialbd.ttf", 11 * SS)
+    except Exception:
+        FONT_LIVE = ImageFont.load_default()
+        FONT_TOAST = ImageFont.load_default()
 
 
 def lerp(a, b, t):
@@ -339,9 +573,22 @@ def rgb(c):
 
 
 class WisprPillApp:
-    def __init__(self):
+    def __init__(self, engine_override=None, phonon_port=None):
         self.root = tk.Tk()
-        self.root.title("Wispr Flow")
+        self.root.title("Whistle Flow")
+
+        self.config = load_config()
+        self.engine = engine_override or self.config.get("engine", "whisper")
+        self.phonon_port = phonon_port or self.config.get("phonon_port", 8000)
+        self.phonon_model = self.config.get("phonon_model", "phonon-2")
+
+        self.phonon_server = PhononServerManager(port=self.phonon_port, model=self.phonon_model)
+        self.phonon_client = PhononStreamClient(port=self.phonon_port)
+
+        self.live_text = ""
+        self.toast_msg = ""
+        self.toast_col = WHITE
+        self.toast_t = 0.0
 
         sw = self.root.winfo_screenwidth()
         sh = self.root.winfo_screenheight()
@@ -391,7 +638,13 @@ class WisprPillApp:
         self.dragged = False
 
         self.setup_controls()
+
+        # Warm up faster-whisper in background thread
         threading.Thread(target=self.warmup, daemon=True).start()
+
+        # If starting in phonon mode, warm up phonon daemon in background thread
+        if self.engine == "phonon":
+            threading.Thread(target=self.phonon_server.ensure_server, daemon=True).start()
 
         self.track_focus()
         self.tick()
@@ -401,10 +654,9 @@ class WisprPillApp:
         self.root.bind("<Button-1>", self.on_press)
         self.root.bind("<B1-Motion>", self.on_drag)
         self.root.bind("<ButtonRelease-1>", self.on_release)
-        self.root.bind("<Button-3>", lambda e: (self.root.destroy(), sys.exit(0)))
+        self.root.bind("<Button-3>", lambda e: self.on_close())
 
         # Primary Push-To-Talk: Ctrl + Space
-        # When space is pressed while ctrl is down:
         self.space_down = False
 
         def on_key_event(e):
@@ -426,7 +678,36 @@ class WisprPillApp:
 
         # Fallback hotkeys
         keyboard.add_hotkey("f8", self.ptt.toggle, suppress=False)
+        keyboard.add_hotkey("f9", self.toggle_engine, suppress=False)
         keyboard.add_hotkey("esc", self.cancel, suppress=False)
+
+    def toggle_engine(self):
+        if self.engine == "whisper":
+            self.engine = "phonon"
+            self.toast_msg = "PHONON 2 (STREAM)"
+            self.toast_col = VIOLET
+            threading.Thread(target=self.phonon_server.ensure_server, daemon=True).start()
+        else:
+            self.engine = "whisper"
+            self.toast_msg = "WHISPER (INT8)"
+            self.toast_col = CYAN
+        self.config["engine"] = self.engine
+        save_config(self.config)
+        self.toast_t = time.perf_counter()
+        play_click("start")
+        logger.info(f"Active engine switched to: {self.engine.upper()}")
+
+    def on_close(self):
+        try:
+            self.phonon_server.stop()
+        except Exception:
+            pass
+        self.root.destroy()
+        sys.exit(0)
+
+    def on_phonon_partial(self, text: str):
+        if self.ptt.is_recording:
+            self.live_text = text.strip()
 
     def on_press(self, e):
         self.press_xy = (e.x_root, e.y_root)
@@ -479,19 +760,27 @@ class WisprPillApp:
         if self.is_transcribing:
             return
         self.done_t = None
+        self.live_text = ""
         self.audio_muter.mute_others()
         self.play_sound("start")
-        logger.info("Recording started.")
+        logger.info(f"Recording started. Active engine: {self.engine.upper()}")
 
         # Clear audio queue
         while not self.audio_queue.empty():
             self.audio_queue.get_nowait()
+
+        if self.engine == "phonon":
+            if not self.phonon_server.is_running():
+                threading.Thread(target=self.phonon_server.ensure_server, daemon=True).start()
+            self.phonon_client.start_stream(on_partial=self.on_phonon_partial)
 
         # Audio capture callback
         def audio_cb(indata, frames, time_info, status):
             if self.ptt.is_recording:
                 flat = indata.flatten().copy()
                 self.audio_queue.put(flat)
+                if self.engine == "phonon":
+                    self.phonon_client.send_audio_chunk(flat)
 
                 # Measure volume for live waveform
                 rms = float(np.sqrt(np.mean(indata ** 2)))
@@ -515,6 +804,9 @@ class WisprPillApp:
             self.ptt.cancel()
             self.level_raw = 0.0
             self._close_stream()
+            if self.engine == "phonon":
+                self.phonon_client.abort()
+            self.live_text = ""
             self.audio_muter.unmute_all()
             while not self.audio_queue.empty():
                 self.audio_queue.get_nowait()
@@ -530,53 +822,67 @@ class WisprPillApp:
         self.play_sound("stop")
 
         target = self.last_target_hwnd
+        engine = self.engine
 
         def _worker():
             pasted = False
-            chunks = []
-            while not self.audio_queue.empty():
-                chunks.append(self.audio_queue.get_nowait())
+            text = ""
 
-            if chunks:
-                audio = np.concatenate(chunks).flatten()
-                rec_duration = len(audio) / SAMPLE_RATE
-                trimmed = trim_silence(audio)
-                trim_duration = len(trimmed) / SAMPLE_RATE
-                logger.info(f"Key released. Total audio: {rec_duration:.2f}s (trimmed: {trim_duration:.2f}s). Decoding...")
+            if engine == "phonon":
+                t0 = time.perf_counter()
+                final = self.phonon_client.stop_and_wait(timeout=2.0)
+                if final:
+                    text = final
+                    logger.info(f"Phonon streaming finalized in {(time.perf_counter() - t0)*1000:.1f}ms: '{text}'")
+                else:
+                    logger.warning("Phonon streaming returned empty or unavailable. Falling back to Whisper...")
 
-                text = ""
-                if len(trimmed) >= int(SAMPLE_RATE * 0.25):
-                    t_decode_start = time.perf_counter()
-                    try:
-                        if self.model is not None:
-                            segments, _ = self.model.transcribe(trimmed, language="en", beam_size=1)
-                            text = " ".join(s.text.strip() for s in segments if s.text).strip()
-                        decode_ms = (time.perf_counter() - t_decode_start) * 1000
-                        logger.info(f"Decoded in {decode_ms:.1f}ms: '{text}'")
-                    except Exception as err:
-                        logger.error(f"Transcribe error: {err}", exc_info=True)
+            # If Whisper engine OR if Phonon returned empty / server unavailable:
+            if not text:
+                chunks = []
+                while not self.audio_queue.empty():
+                    chunks.append(self.audio_queue.get_nowait())
 
-                if text:
-                    t_paste_start = time.perf_counter()
-                    subprocess.run(["clip"], input=text.encode("utf-16le"), check=True)
-                    if target and user32.IsWindow(target):
+                if chunks:
+                    audio = np.concatenate(chunks).flatten()
+                    rec_duration = len(audio) / SAMPLE_RATE
+                    trimmed = trim_silence(audio)
+                    trim_duration = len(trimmed) / SAMPLE_RATE
+                    logger.info(f"Key released. Audio: {rec_duration:.2f}s (trimmed: {trim_duration:.2f}s). Decoding with Whisper...")
+
+                    if len(trimmed) >= int(SAMPLE_RATE * 0.25):
+                        t_decode_start = time.perf_counter()
                         try:
-                            user32.SetForegroundWindow(target)
-                        except Exception:
-                            pass
-                    time.sleep(0.04)
-                    # Inject Ctrl + V
-                    user32.keybd_event(0x11, 0, 0, 0)
-                    user32.keybd_event(0x56, 0, 0, 0)
-                    user32.keybd_event(0x56, 0, 0x0002, 0)
-                    user32.keybd_event(0x11, 0, 0x0002, 0)
-                    pasted = True
-                    total_latency_ms = (time.perf_counter() - t_release) * 1000
-                    logger.info(f"Pasted in {(time.perf_counter() - t_paste_start)*1000:.1f}ms. Total latency: {total_latency_ms:.1f}ms")
+                            if self.model is not None:
+                                segments, _ = self.model.transcribe(trimmed, language="en", beam_size=1)
+                                text = " ".join(s.text.strip() for s in segments if s.text).strip()
+                            decode_ms = (time.perf_counter() - t_decode_start) * 1000
+                            logger.info(f"Whisper decoded in {decode_ms:.1f}ms: '{text}'")
+                        except Exception as err:
+                            logger.error(f"Whisper transcribe error: {err}", exc_info=True)
+
+            if text:
+                t_paste_start = time.perf_counter()
+                subprocess.run(["clip"], input=text.encode("utf-16le"), check=True)
+                if target and user32.IsWindow(target):
+                    try:
+                        user32.SetForegroundWindow(target)
+                    except Exception:
+                        pass
+                time.sleep(0.04)
+                # Inject Ctrl + V
+                user32.keybd_event(0x11, 0, 0, 0)
+                user32.keybd_event(0x56, 0, 0, 0)
+                user32.keybd_event(0x56, 0, 0x0002, 0)
+                user32.keybd_event(0x11, 0, 0x0002, 0)
+                pasted = True
+                total_latency_ms = (time.perf_counter() - t_release) * 1000
+                logger.info(f"Pasted in {(time.perf_counter() - t_paste_start)*1000:.1f}ms. Total latency: {total_latency_ms:.1f}ms")
 
             time.sleep(0.08)
             if pasted:
                 self.done_t = time.perf_counter()
+            self.live_text = ""
             self.is_transcribing = False
 
         threading.Thread(target=_worker, daemon=True).start()
@@ -588,7 +894,8 @@ class WisprPillApp:
         self.last_t = now
 
         in_done = self.done_t is not None and (now - self.done_t) < 0.9
-        active = self.ptt.is_recording or self.is_transcribing or in_done
+        in_toast = bool(self.toast_msg and (now - self.toast_t < 1.2))
+        active = self.ptt.is_recording or self.is_transcribing or in_done or in_toast
 
         # Spring for the expand/collapse (gives that little bounce)
         target = 1.0 if active else 0.0
@@ -611,7 +918,10 @@ class WisprPillApp:
         self.level += (lt - self.level) * (1 - math.exp(-(28 if lt > self.level else 7) * dt))
 
         # Colour + glow targets
-        if in_done:
+        if in_toast:
+            col_t = self.toast_col
+            glow_t, glow_col_t = 0.7, self.toast_col
+        elif in_done:
             col_t = GREEN
             fade = math.exp(-(now - self.done_t) * 3.0)
             glow_t, glow_col_t = 0.8 * fade, GREEN
@@ -619,8 +929,12 @@ class WisprPillApp:
             col_t = CYAN
             glow_t, glow_col_t = 0.55, aurora(now * 0.35)
         elif self.ptt.is_recording:
-            col_t = WHITE
-            glow_t, glow_col_t = 0.15 + 0.45 * self.level, (210, 200, 255)
+            if self.engine == "phonon":
+                col_t = VIOLET if self.live_text else WHITE
+                glow_t, glow_col_t = 0.2 + 0.4 * self.level, VIOLET if self.live_text else (210, 200, 255)
+            else:
+                col_t = WHITE
+                glow_t, glow_col_t = 0.15 + 0.45 * self.level, (210, 200, 255)
         else:
             col_t = lerp_color(IDLE_COL, WHITE, self.hover * 0.8)
             glow_t, glow_col_t = 0.0, self.glow_col
@@ -631,10 +945,11 @@ class WisprPillApp:
 
         self.update_bars(now, dt, in_done)
 
-        # Only redraw when something visibly changed
+        # Redraw when state changed
         sig = (round(self.expand, 3), round(self.hover, 3), round(self.glow, 3), self.x, self.y,
                tuple(int(v) for v in self.col), tuple(int(v) for v in self.glow_col),
-               tuple(round(h, 1) for h in self.bar_h))
+               tuple(round(h, 1) for h in self.bar_h), self.live_text,
+               self.toast_msg if in_toast else "")
         if sig != self.last_sig:
             self.last_sig = sig
             self.surface.update(self.compose(now), self.x, self.y)
@@ -671,7 +986,19 @@ class WisprPillApp:
         e_c = clamp(e)
         hv = self.hover
 
-        pw = max(24.0, lerp(IDLE_W, ACT_W, e) + 14 * hv * (1 - e_c))
+        in_toast = bool(self.toast_msg and (now - self.toast_t < 1.2))
+        has_live_text = bool(self.engine == "phonon" and self.ptt.is_recording and self.live_text)
+
+        if in_toast:
+            target_act_w = 230.0
+        elif has_live_text:
+            # Smooth expansion based on text length
+            est_w = 120.0 + len(self.live_text) * 7.5
+            target_act_w = min(MAX_ACT_W, max(ACT_W, est_w))
+        else:
+            target_act_w = ACT_W
+
+        pw = max(24.0, lerp(IDLE_W, target_act_w, e) + 14 * hv * (1 - e_c))
         ph = max(18.0, lerp(IDLE_H, ACT_H, e) + 3 * hv * (1 - e_c))
         ph *= 1 - min(0.08, abs(self.vel) * 0.02)  # tiny squash & stretch while moving
         cx, cy = W / 2, H / 2
@@ -698,29 +1025,71 @@ class WisprPillApp:
             glow.putalpha(gm)
             canvas = Image.alpha_composite(canvas, glow)
 
-        # Pill body + border + bars
+        # Pill body + border
         big = Image.new("RGBA", (W * S, H * S), (0, 0, 0, 0))
         d = ImageDraw.Draw(big)
         border_a = int(lerp(120, 235, e_c) + 25 * hv)
         d.rounded_rectangle((x0 * S, y0 * S, x1 * S, y1 * S), radius=r * S, fill=BG + (248,),
                             outline=(255, 255, 255, border_a), width=int(1.6 * S))
 
-        avail = pw / 2 - 15
-        max_h = ph - 10
-        for i in range(NUM_BARS):
-            off = (i - (NUM_BARS - 1) / 2) * BAR_SPACING
-            vis = clamp((avail - abs(off)) / BAR_SPACING + 0.5)
-            if vis <= 0.01:
-                continue
-            h = min(max(self.bar_h[i], BAR_W), max_h)
-            bx = cx + off
-            if self.is_transcribing:
-                col = aurora(now * 0.5 - i * 0.045)
-            else:
-                col = self.col
-            alpha = int(255 * vis * lerp(0.8, 1.0, e_c))
-            d.rounded_rectangle(((bx - BAR_W / 2) * S, (cy - h / 2) * S, (bx + BAR_W / 2) * S, (cy + h / 2) * S),
-                                radius=BAR_W / 2 * S, fill=rgb(col) + (alpha,))
+        if in_toast:
+            # Draw toast engine message
+            tw = d.textlength(self.toast_msg, font=FONT_TOAST)
+            tx = cx * S - tw / 2
+            ty = cy * S - 7 * S
+            d.text((tx, ty), self.toast_msg, font=FONT_TOAST, fill=rgb(self.toast_col) + (245,))
+        elif has_live_text and e_c > 0.4:
+            # Phonon Live Streaming: 7 voice bars on left + streaming text preview on right
+            mini_bars = 7
+            mini_spacing = 6.0
+            start_bx = (x0 + 20) * S
+            max_h = (ph - 12) * S
+            for i in range(mini_bars):
+                bx = start_bx + i * (mini_spacing * S)
+                bh = max(BAR_W * S, min(self.bar_h[i] * S, max_h))
+                d.rounded_rectangle((bx - (BAR_W * S) / 2, cy * S - bh / 2, bx + (BAR_W * S) / 2, cy * S + bh / 2),
+                                    radius=(BAR_W * S) / 2, fill=VIOLET + (230,))
+
+            # Format live text with ellipsis if it overflows available space
+            text_x = start_bx + mini_bars * (mini_spacing * S) + 10 * S
+            max_text_w = (x1 - 18) * S - text_x
+
+            display_text = self.live_text
+            while display_text and d.textlength("... " + display_text, font=FONT_LIVE) > max_text_w:
+                parts = display_text.split(" ", 1)
+                if len(parts) > 1:
+                    display_text = parts[1]
+                else:
+                    display_text = display_text[3:]
+            if display_text != self.live_text and display_text:
+                display_text = "... " + display_text
+
+            # Render live text
+            d.text((text_x, cy * S - 9 * S), display_text, font=FONT_LIVE, fill=(255, 255, 255, 240))
+
+            # Pulsing cursor dot
+            cursor_x = text_x + d.textlength(display_text, font=FONT_LIVE) + 5 * S
+            cursor_alpha = int(128 + 127 * math.sin(now * 8))
+            d.ellipse((cursor_x, cy * S - 3 * S, cursor_x + 5 * S, cy * S + 2 * S),
+                      fill=VIOLET + (cursor_alpha,))
+        else:
+            # Standard 21 bars (Whisper mode or idle / initial recording state)
+            avail = pw / 2 - 15
+            max_h = ph - 10
+            for i in range(NUM_BARS):
+                off = (i - (NUM_BARS - 1) / 2) * BAR_SPACING
+                vis = clamp((avail - abs(off)) / BAR_SPACING + 0.5)
+                if vis <= 0.01:
+                    continue
+                h = min(max(self.bar_h[i], BAR_W), max_h)
+                bx = cx + off
+                if self.is_transcribing:
+                    col = aurora(now * 0.5 - i * 0.045)
+                else:
+                    col = self.col
+                alpha = int(255 * vis * lerp(0.8, 1.0, e_c))
+                d.rounded_rectangle(((bx - BAR_W / 2) * S, (cy - h / 2) * S, (bx + BAR_W / 2) * S, (cy + h / 2) * S),
+                                    radius=BAR_W / 2 * S, fill=rgb(col) + (alpha,))
 
         big = big.resize((W, H), Image.LANCZOS)
         return Image.alpha_composite(canvas, big)
@@ -736,4 +1105,11 @@ if __name__ == "__main__":
     if kernel32.GetLastError() == ERROR_ALREADY_EXISTS:
         # Another instance is already running
         sys.exit(0)
-    WisprPillApp().run()
+
+    parser = argparse.ArgumentParser(description="Whistle Flow Dictation Pill")
+    parser.add_argument("--engine", choices=["whisper", "phonon"], help="Speech recognition engine (whisper or phonon)")
+    parser.add_argument("--port", type=int, default=None, help="Phonon server port")
+    args, _ = parser.parse_known_args()
+
+    WisprPillApp(engine_override=args.engine, phonon_port=args.port).run()
+

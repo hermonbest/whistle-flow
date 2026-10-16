@@ -4,5 +4,5 @@ numpy>=1.26.0
 Pillow>=10.0.0
 keyboard>=0.13.5
 pycaw>=20260927
-
-
+fermion-research>=0.2.11
+websockets>=13.0
