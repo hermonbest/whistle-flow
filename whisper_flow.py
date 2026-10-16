@@ -654,6 +654,7 @@ class WisprPillApp:
         self.root.bind("<Button-1>", self.on_press)
         self.root.bind("<B1-Motion>", self.on_drag)
         self.root.bind("<ButtonRelease-1>", self.on_release)
+        self.root.bind("<Double-Button-1>", lambda e: self.toggle_engine())
         self.root.bind("<Button-3>", lambda e: self.on_close())
 
         # Primary Push-To-Talk: Ctrl + Space
@@ -663,12 +664,18 @@ class WisprPillApp:
             if e.name == "space":
                 if e.event_type == "down":
                     if keyboard.is_pressed("ctrl") and not self.space_down:
+                        if keyboard.is_pressed("shift"):
+                            # Ctrl + Shift + Space: Toggle between Whisper and Phonon
+                            self.toggle_engine()
+                            return
                         self.space_down = True
                         self.ptt.on_press()
                 elif e.event_type == "up":
                     if self.space_down:
                         self.space_down = False
                         self.ptt.on_release()
+            elif e.name == "f9" and e.event_type == "down":
+                self.toggle_engine()
             elif self.space_down and e.event_type == "up" and ("ctrl" in e.name or "control" in e.name):
                 # Also trigger release if Ctrl is released before Space during PTT
                 self.space_down = False
@@ -678,7 +685,7 @@ class WisprPillApp:
 
         # Fallback hotkeys
         keyboard.add_hotkey("f8", self.ptt.toggle, suppress=False)
-        keyboard.add_hotkey("f9", self.toggle_engine, suppress=False)
+        keyboard.add_hotkey("ctrl+shift+e", self.toggle_engine, suppress=False)
         keyboard.add_hotkey("esc", self.cancel, suppress=False)
 
     def toggle_engine(self):
